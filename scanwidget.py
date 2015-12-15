@@ -56,20 +56,22 @@ class ScanSlider(QtWidgets.QGraphicsObject):
     def __init__(self, px_size = 20):
         QtWidgets.QGraphicsItem.__init__(self)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
+        self.px_size = px_size
         
         # Make slider an equilateral triangle w/ sides px_size pixels wide.
         altitude = math.ceil((px_size/2)*math.sqrt(3))
         
-        points = [QtCore.QPoint(-(px_size/2), altitude), QtCore.QPoint(0, 0), \
-            QtCore.QPoint((px_size/2), altitude)]
+        points = [QtCore.QPoint(-(self.px_size/2), altitude), \
+            QtCore.QPoint(0, 0), QtCore.QPoint((self.px_size/2), altitude)]
         self.shape = QtGui.QPolygon(points)
 
     def boundingRect(self):
+        #TODO: Set based on whatever user passed in to create QPen.
         pen_width = 1
         # If bounding box does not cover whole polygon, trails will be left
         # when the object is moved.
-        return QtCore.QRectF(-10 - pen_width/2, 0 - pen_width / 2, \
-            20 + pen_width, 20 + pen_width)
+        return QtCore.QRectF(-self.px_size/2 - pen_width/2, 0 - pen_width/2, \
+            self.px_size + pen_width, self.px_size + pen_width)
 
     def paint(self, painter, op, widget):
         painter.drawConvexPolygon(self.shape)
