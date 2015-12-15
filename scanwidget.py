@@ -43,13 +43,16 @@ class ScanBox(QtWidgets.QWidget):
     pass
 
 
-# Needs to be subclassed from QGraphicsItem b/c Qt will not send mouse events
+# Needs to be subclassed from QGraphicsItem* b/c Qt will not send mouse events
 # to GraphicsItems that do not reimplement mousePressEvent (How does Qt know?).
 # Qt decides this while iterating to find which GraphicsItem should get control
 # of the mouse. mousePressEvent is accepted by default.
 # TODO: The slider that was most recently clicked should have z-priority.
 # Qt's mouseGrab logic should implement this correctly.
-class ScanSlider(QtWidgets.QGraphicsItem):
+# * Subclassed from QGraphicsObject to get signal functionality.
+class ScanSlider(QtWidgets.QGraphicsObject):
+    sigPosChanged = QtCore.Signal(object)
+    
     def __init__(self, px_size = 20):
         QtWidgets.QGraphicsItem.__init__(self)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
@@ -76,14 +79,16 @@ class ScanSlider(QtWidgets.QGraphicsItem):
 
     def mouseMoveEvent(self, ev):
         QtWidgets.QGraphicsItem.mouseMoveEvent(self, ev)
+        self.sigPosChanged.emit(self.scenePos().x())
+        
 
 # Is it scene's responsibility or item's responsibility to ensure item stays
 # in range of allowed moves?
     def itemChange(self, change, val):
-        if change == QtWidgets.QGraphicsItem.ItemPositionChange:
-            print("Position changed")
-        else:
-            print(change)
+        # if change == QtWidgets.QGraphicsItem.ItemPositionChange:
+        #     print("Position changed")
+        # else:
+        #     print(change)
 
         return QtWidgets.QGraphicsItem.itemChange(self, change, val)
 
@@ -92,14 +97,20 @@ class ScanSlider(QtWidgets.QGraphicsItem):
 # viewed. We do not want this here; viewed portion of scene should be fixed.
 # Items are moved/transformed within the fixed scene.
 class ScanWidget(QtWidgets.QGraphicsView):
+    sigMinChanged = QtCore.Signal(object)
+    sigMaxChanged = QtCore.Signal(object)
+    sigNumChanged = QtCore.Signal(object)
+    
     def __init__(self):
         self.scene = ScanScene()
         QtWidgets.QGraphicsView.__init__(self, self.scene)
-        self.min_slider = self.scene.addItem(ScanSlider()) # , \
+        self.min_slider = ScanSlider()
+        self.max_slider = ScanSlider()
+        self.scene.addItem(self.min_slider) # , \
             # brush = QtGui.QBrush(QtGui.QColor(255,0,0,255)))
-        self.max_slider = self.scene.addItem(ScanSlider()) # , \
+        self.scene.addItem(self.max_slider) # , \
             # brush = QtGui.QBrush(QtGui.QColor(0,0,255,255)))
-        # self.max_slider = ScanSlider()        
+        self.min_slider.sigPosChanged.connect(self.sigMinChanged)
+        self.max_slider.sigPosChanged.connect(self.sigMaxChanged)
         
-        # self.min_slider = ScanSlider()
-        # self.max_slider = ScanSlider()
+        

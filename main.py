@@ -39,6 +39,9 @@ def main():
     scanner = scanwidget.ScanWidget()
 
     layout.addWidget(scanner, 0, 0, 1, -1)
+    scanner.sigMinChanged.connect(spinboxes[0].setValue)
+    scanner.sigMaxChanged.connect(spinboxes[1].setValue)
+    scanner.sigNumChanged.connect(spinboxes[2].setValue)
     
     for s in spinboxes:
         if type is QtWidgets.QDoubleSpinBox:
