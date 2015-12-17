@@ -1,9 +1,11 @@
 import asyncio
 import atexit
 import os
+import scanwidget
+
 # First two are portable between PyQt4 and 5. Remaining are not.
 from quamash import QApplication, QEventLoop, QtGui, QtCore, QtWidgets
-import scanwidget
+
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -39,9 +41,6 @@ def main():
     scanner = scanwidget.ScanWidget()
 
     layout.addWidget(scanner, 0, 0, 1, -1)
-    scanner.sigMinChanged.connect(spinboxes[0].setValue)
-    scanner.sigMaxChanged.connect(spinboxes[1].setValue)
-    scanner.sigNumChanged.connect(spinboxes[2].setValue)
     
     for s in spinboxes:
         if type is QtWidgets.QDoubleSpinBox:
@@ -56,6 +55,10 @@ def main():
         QtWidgets.QLabel("Max"), spinboxes[1], \
         QtWidgets.QLabel("Num Points"), spinboxes[2]]):
             layout.addWidget(w, 1, col)
+
+    scanner.sigMinChanged.connect(spinboxes[0].setValue)
+    scanner.sigMaxChanged.connect(spinboxes[1].setValue)
+    scanner.sigNumChanged.connect(spinboxes[2].setValue)
 
     win.setCentralWidget(container)
     win.show()
