@@ -43,7 +43,7 @@ def main():
     layout.addWidget(scanner, 0, 0, 1, -1)
     
     for s in spinboxes:
-        if type is QtWidgets.QDoubleSpinBox:
+        if type(s) is QtWidgets.QDoubleSpinBox:
             s.setDecimals(3)
             s.setMaximum(float("Inf"))
             s.setMinimum(float("-Inf"))
