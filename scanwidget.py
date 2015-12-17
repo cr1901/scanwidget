@@ -51,7 +51,7 @@ class ScanBox(QtWidgets.QWidget):
 # Qt's mouseGrab logic should implement this correctly.
 # * Subclassed from QGraphicsObject to get signal functionality.
 class ScanSlider(QtWidgets.QGraphicsObject):
-    sigPosChanged = QtCore.pyqtSignal(object)
+    sigPosChanged = QtCore.pyqtSignal(float)
     
     def __init__(self, px_size = 20):
         QtWidgets.QGraphicsItem.__init__(self)
@@ -84,7 +84,7 @@ class ScanSlider(QtWidgets.QGraphicsObject):
         self.sigPosChanged.emit(self.scenePos().x())
         
 
-# Is it scene's responsibility or item's responsibility to ensure item stays
+# TODO: Is it scene's responsibility or item's responsibility to ensure item stays
 # in range of allowed moves?
     def itemChange(self, change, val):
         # if change == QtWidgets.QGraphicsItem.ItemPositionChange:
@@ -99,9 +99,9 @@ class ScanSlider(QtWidgets.QGraphicsObject):
 # viewed. We do not want this here; viewed portion of scene should be fixed.
 # Items are moved/transformed within the fixed scene.
 class ScanWidget(QtWidgets.QGraphicsView):
-    sigMinChanged = QtCore.pyqtSignal(object)
-    sigMaxChanged = QtCore.pyqtSignal(object)
-    sigNumChanged = QtCore.pyqtSignal(object)
+    sigMinChanged = QtCore.pyqtSignal(float)
+    sigMaxChanged = QtCore.pyqtSignal(float)
+    sigNumChanged = QtCore.pyqtSignal(int)
     
     def __init__(self):
         self.scene = ScanScene()
