@@ -125,6 +125,20 @@ class ScanWidget(QtWidgets.QGraphicsView):
         self.scene.addItem(self.max_slider)
         self.min_slider.sigPosChanged.connect(self.sigMinChanged)
         self.max_slider.sigPosChanged.connect(self.sigMaxChanged)
+    
+    def zoomOut(self):
+        self.scale(1/1.2, 1/1.2)
+
+    def zoomIn(self):
+        self.scale(1.2, 1.2)
+
+    def wheelEvent(self, ev):
+        # if ev.delta() > 0: # TODO: Qt-4 specific.
+        # TODO: If sliders are off screen after a zoom-in, what should we do?
+        if ev.angleDelta().y() > 0:
+            self.zoomIn()
+        else:
+            self.zoomOut()
         
     # def resizeEvent(self):
     #     pass
