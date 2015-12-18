@@ -64,6 +64,7 @@ class ScanSlider(QtWidgets.QGraphicsObject):
     def __init__(self, pxSize = 20, color = QtGui.QBrush(QtGui.QColor(128,128,128,128))):
         QtWidgets.QGraphicsItem.__init__(self)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
+        self.setFlag(QtWidgets.QGraphicsItem.ItemIgnoresTransformations, True)
         self.pxSize = pxSize
         self.color = color
         
@@ -75,7 +76,6 @@ class ScanSlider(QtWidgets.QGraphicsObject):
         self.shape = QtGui.QPolygon(points)
 
     def boundingRect(self):
-        #TODO: Set based on whatever user passed in to create QPen.
         penWidth = 1
         # If bounding box does not cover whole polygon, trails will be left
         # when the object is moved.
