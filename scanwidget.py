@@ -61,26 +61,26 @@ class ScanBox(QtWidgets.QWidget):
 class ScanSlider(QtWidgets.QGraphicsObject):
     sigPosChanged = QtCore.pyqtSignal(float)
     
-    def __init__(self, px_size = 20, color = QtGui.QBrush(QtGui.QColor(128,128,128,128))):
+    def __init__(self, pxSize = 20, color = QtGui.QBrush(QtGui.QColor(128,128,128,128))):
         QtWidgets.QGraphicsItem.__init__(self)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
-        self.px_size = px_size
+        self.pxSize = pxSize
         self.color = color
         
-        # Make slider an equilateral triangle w/ sides px_size pixels wide.
-        altitude = math.ceil((px_size/2)*math.sqrt(3))
+        # Make slider an equilateral triangle w/ sides pxSize pixels wide.
+        altitude = math.ceil((pxSize/2)*math.sqrt(3))
         
-        points = [QtCore.QPoint(-(self.px_size/2), altitude), \
-            QtCore.QPoint(0, 0), QtCore.QPoint((self.px_size/2), altitude)]
+        points = [QtCore.QPoint(-(self.pxSize/2), altitude), \
+            QtCore.QPoint(0, 0), QtCore.QPoint((self.pxSize/2), altitude)]
         self.shape = QtGui.QPolygon(points)
 
     def boundingRect(self):
         #TODO: Set based on whatever user passed in to create QPen.
-        pen_width = 1
+        penWidth = 1
         # If bounding box does not cover whole polygon, trails will be left
         # when the object is moved.
-        return QtCore.QRectF(-self.px_size/2 - pen_width/2, 0 - pen_width/2, \
-            self.px_size + pen_width, self.px_size + pen_width)
+        return QtCore.QRectF(-self.pxSize/2 - penWidth/2, 0 - penWidth/2, \
+            self.pxSize + penWidth, self.pxSize + penWidth)
 
     def paint(self, painter, op, widget):
         painter.setBrush(self.color)
@@ -119,12 +119,12 @@ class ScanWidget(QtWidgets.QGraphicsView):
         QtWidgets.QGraphicsView.__init__(self, self.scene)
         # self.setSceneRect(self.frameGeometry()) # Ensure no scrollbars.
         
-        self.min_slider = ScanSlider(color = QtGui.QColor(0,0,255,128))
-        self.max_slider = ScanSlider(color = QtGui.QColor(255,0,0,128))
-        self.scene.addItem(self.min_slider)
-        self.scene.addItem(self.max_slider)
-        self.min_slider.sigPosChanged.connect(self.sigMinChanged)
-        self.max_slider.sigPosChanged.connect(self.sigMaxChanged)
+        self.minSlider = ScanSlider(color = QtGui.QColor(0,0,255,128))
+        self.maxSlider = ScanSlider(color = QtGui.QColor(255,0,0,128))
+        self.scene.addItem(self.minSlider)
+        self.scene.addItem(self.maxSlider)
+        self.minSlider.sigPosChanged.connect(self.sigMinChanged)
+        self.maxSlider.sigPosChanged.connect(self.sigMaxChanged)
     
     def zoomOut(self):
         self.scale(1/1.2, 1/1.2)
