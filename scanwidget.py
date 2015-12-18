@@ -18,15 +18,21 @@ class ScanAxis(QtWidgets.QGraphicsWidget):
         pass
 
 
+class DataPoint(QtWidgets.QGraphicsItem):
+    def __init__(self):
+        pass
 # class ScanModel(QO
 
 
-# ScanScene holds all the objects.
+# ScanScene holds all the objects, and controls how events are received to
+# the ScanSliders (in particular, constraining movement to the x-axis).
 class ScanScene(QtWidgets.QGraphicsScene):
     def __init__(self):
         QtWidgets.QGraphicsScene.__init__(self)
 
-
+    def mouseMoveEvent(self, ev):
+        QtWidgets.QGraphicsScene.mouseMoveEvent(self, ev)
+        
     # def mouseClickEvent(self, ev):
     #     pass
     # 
@@ -42,6 +48,8 @@ class ScanScene(QtWidgets.QGraphicsScene):
 class ScanBox(QtWidgets.QWidget):
     pass
 
+# Houses the ScanAxis and Sliders in one row, buttons which auto-scale the view
+# in another. Also 
 
 # Needs to be subclassed from QGraphicsItem* b/c Qt will not send mouse events
 # to GraphicsItems that do not reimplement mousePressEvent (How does Qt know?).
@@ -53,10 +61,11 @@ class ScanBox(QtWidgets.QWidget):
 class ScanSlider(QtWidgets.QGraphicsObject):
     sigPosChanged = QtCore.pyqtSignal(float)
     
-    def __init__(self, px_size = 20):
+    def __init__(self, px_size = 20, color = QtGui.QBrush(QtGui.QColor(128,128,128,128))):
         QtWidgets.QGraphicsItem.__init__(self)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
         self.px_size = px_size
+        self.color = color
         
         # Make slider an equilateral triangle w/ sides px_size pixels wide.
         altitude = math.ceil((px_size/2)*math.sqrt(3))
@@ -74,6 +83,8 @@ class ScanSlider(QtWidgets.QGraphicsObject):
             self.px_size + pen_width, self.px_size + pen_width)
 
     def paint(self, painter, op, widget):
+        painter.setBrush(self.color)
+        painter.setPen(self.color)
         painter.drawConvexPolygon(self.shape)
 
     def mousePressEvent(self, ev):
@@ -106,12 +117,12 @@ class ScanWidget(QtWidgets.QGraphicsView):
     def __init__(self):
         self.scene = ScanScene()
         QtWidgets.QGraphicsView.__init__(self, self.scene)
-        self.min_slider = ScanSlider()
-        self.max_slider = ScanSlider()
-        self.scene.addItem(self.min_slider) # , \
-            # brush = QtGui.QBrush(QtGui.QColor(255,0,0,255)))
-        self.scene.addItem(self.max_slider) # , \
-            # brush = QtGui.QBrush(QtGui.QColor(0,0,255,255)))
+        # self.setSceneRect(self.frameGeometry()) # Ensure no scrollbars.
+        
+        self.min_slider = ScanSlider(color = QtGui.QColor(0,0,255,128))
+        self.max_slider = ScanSlider(color = QtGui.QColor(255,0,0,128))
+        self.scene.addItem(self.min_slider)
+        self.scene.addItem(self.max_slider)
         self.min_slider.sigPosChanged.connect(self.sigMinChanged)
         self.max_slider.sigPosChanged.connect(self.sigMaxChanged)
         
