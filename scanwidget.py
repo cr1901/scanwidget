@@ -31,6 +31,7 @@ class ScanScene(QtWidgets.QGraphicsScene):
         QtWidgets.QGraphicsScene.__init__(self)
 
     def mouseMoveEvent(self, ev):
+        
         QtWidgets.QGraphicsScene.mouseMoveEvent(self, ev)
         
     # def mouseClickEvent(self, ev):
@@ -58,6 +59,7 @@ class ScanBox(QtWidgets.QWidget):
 # TODO: The slider that was most recently clicked should have z-priority.
 # Qt's mouseGrab logic should implement this correctly.
 # * Subclassed from QGraphicsObject to get signal functionality.
+# ScanSlider assumes that it's parent is the scene.
 class ScanSlider(QtWidgets.QGraphicsObject):
     sigPosChanged = QtCore.pyqtSignal(float)
     
@@ -65,6 +67,7 @@ class ScanSlider(QtWidgets.QGraphicsObject):
         QtWidgets.QGraphicsItem.__init__(self)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIgnoresTransformations, True)
+        self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges, True)
         self.pxSize = pxSize
         self.color = color
         
@@ -93,17 +96,23 @@ class ScanSlider(QtWidgets.QGraphicsObject):
     def mouseMoveEvent(self, ev):
         QtWidgets.QGraphicsItem.mouseMoveEvent(self, ev)
         self.sigPosChanged.emit(self.scenePos().x())
+
+    # Constrain movement to X axis and ensure that the sliders (bounding box?)
+    # do not leave the scene.
+    # TODO: We need make sure the view doesn't recenter the scene in an attempt
+    # to prevent adding scrollbars. Scene's X-axis should always be centered
+    # at (0,0). 
+    # TODO: Resize event for the scene should maintain current slider
+    # positions or rescale the X-axis so the distance between
+    # sliders and the edge of the scene remains proportional?
+    def itemChange(self, change, val):
+        if change == QtWidgets.QGraphicsItem.ItemPositionChange:
+            newPos = val
+            newPos.setY(0) # Constrain movement to X-axis of parent.
+            return newPos
+        return QtWidgets.QGraphicsItem.itemChange(self, change, val)
         
 
-# TODO: Is it scene's responsibility or item's responsibility to ensure item stays
-# in range of allowed moves?
-    def itemChange(self, change, val):
-        # if change == QtWidgets.QGraphicsItem.ItemPositionChange:
-        #     print("Position changed")
-        # else:
-        #     print(change)
-
-        return QtWidgets.QGraphicsItem.itemChange(self, change, val)
 
 # The ScanWidget proper.
 # TODO: Scene is centered on visible items by default when the scene is first
@@ -127,10 +136,10 @@ class ScanWidget(QtWidgets.QGraphicsView):
         self.maxSlider.sigPosChanged.connect(self.sigMaxChanged)
     
     def zoomOut(self):
-        self.scale(1/1.2, 1/1.2)
+        self.scale(1/1.2, 1)
 
     def zoomIn(self):
-        self.scale(1.2, 1.2)
+        self.scale(1.2, 1)
 
     def wheelEvent(self, ev):
         # if ev.delta() > 0: # TODO: Qt-4 specific.
