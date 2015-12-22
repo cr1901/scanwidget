@@ -59,6 +59,9 @@ def main():
     scanner.sigMinChanged.connect(spinboxes[0].setValue)
     scanner.sigMaxChanged.connect(spinboxes[1].setValue)
     scanner.sigNumChanged.connect(spinboxes[2].setValue)
+    spinboxes[0].valueChanged.connect(scanner.setMin)
+    spinboxes[1].valueChanged.connect(scanner.setMax)
+    
 
     win.setCentralWidget(container)
     win.show()

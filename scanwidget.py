@@ -15,6 +15,7 @@ class ScanAxis(QtWidgets.QGraphicsWidget):
         self.boundright = 1
 
     def paint(self, painter, op, widget):
+        # sceneRect = self.scene.sceneRect()
         pass
 
 
@@ -26,6 +27,7 @@ class DataPoint(QtWidgets.QGraphicsItem):
 
 # ScanScene holds all the objects, and controls how events are received to
 # the ScanSliders (in particular, constraining movement to the x-axis).
+# TODO: SceneRect only ever has to be as large in the Y-direction as the sliders.
 class ScanScene(QtWidgets.QGraphicsScene):
     def __init__(self):
         QtWidgets.QGraphicsScene.__init__(self)
@@ -118,6 +120,7 @@ class ScanSlider(QtWidgets.QGraphicsObject):
 # TODO: Scene is centered on visible items by default when the scene is first
 # viewed. We do not want this here; viewed portion of scene should be fixed.
 # Items are moved/transformed within the fixed scene.
+# TODO: On a resize, should the spinbox's default increment change?
 class ScanWidget(QtWidgets.QGraphicsView):
     sigMinChanged = QtCore.pyqtSignal(float)
     sigMaxChanged = QtCore.pyqtSignal(float)
@@ -134,7 +137,21 @@ class ScanWidget(QtWidgets.QGraphicsView):
         self.scene.addItem(self.maxSlider)
         self.minSlider.sigPosChanged.connect(self.sigMinChanged)
         self.maxSlider.sigPosChanged.connect(self.sigMaxChanged)
-    
+
+    def setMax(self, val):
+        # emitting sigPosChanged might be moved to setPos. This will prevent
+        # infinite recursion in that case.
+        if val != self.maxSlider.scenePos(): # WARNING: COMPARING FLOATS! 
+            self.maxSlider.setPos(QtCore.QPointF(val, 0))
+        # self.update() # Might be needed, but paint seems to occur correctly.
+
+    def setMin(self, val):
+        if val != self.minSlider.scenePos(): # WARNING: COMPARING FLOATS! 
+            self.minSlider.setPos(QtCore.QPointF(val, 0))
+
+    def setNumPoints(self, val):
+        pass
+
     def zoomOut(self):
         self.scale(1/1.2, 1)
 
