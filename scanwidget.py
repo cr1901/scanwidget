@@ -73,6 +73,7 @@ class ScanSlider(QtWidgets.QGraphicsObject):
     
     def __init__(self, pxSize = 20, color = QtGui.QColor(128,128,128,128)):
         QtWidgets.QGraphicsItem.__init__(self)
+        self.xChanged.connect(self.emitSigPosChanged)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIgnoresTransformations, True)
         self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges, True)
@@ -103,6 +104,8 @@ class ScanSlider(QtWidgets.QGraphicsObject):
 
     def mouseMoveEvent(self, ev):
         QtWidgets.QGraphicsItem.mouseMoveEvent(self, ev)
+
+    def emitSigPosChanged(self):
         self.sigPosChanged.emit(self.scenePos().x())
 
     # Constrain movement to X axis and ensure that the sliders (bounding box?)
