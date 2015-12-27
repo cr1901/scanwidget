@@ -19,9 +19,15 @@ class ScanAxis(QtWidgets.QGraphicsWidget):
         pass
 
 
-class DataPoint(QtWidgets.QGraphicsItem):
-    def __init__(self):
-        pass
+class DataPoint(QtWidgets.QGraphicsEllipseItem):
+    def __init__(self, pxSize = 2, color = QtGui.QColor(128,128,128,128)):
+        QtWidgets.QGraphicsEllipseItem.__init__(self, 0, 0, pxSize, pxSize)
+        self.setFlag(QtWidgets.QGraphicsItem.ItemIgnoresTransformations, True)
+        self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges, True)
+        self.setBrush(color)
+        self.setPen(color)
+
+
 # class ScanModel(QO
 
 
@@ -81,7 +87,7 @@ class ScanSlider(QtWidgets.QGraphicsObject):
         self.shape = QtGui.QPolygon(points)
 
     def boundingRect(self):
-        penWidth = 1
+        penWidth = 1 # Not user-settable.
         # If bounding box does not cover whole polygon, trails will be left
         # when the object is moved.
         return QtCore.QRectF(-self.pxSize/2 - penWidth/2, 0 - penWidth/2, \
