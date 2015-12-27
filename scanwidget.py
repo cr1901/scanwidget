@@ -175,7 +175,18 @@ class ScanWidget(QtWidgets.QGraphicsView):
             self.zoomIn()
         else:
             self.zoomOut()
-        
+
+    # Items in scene grab mouse in this function. If shift is pressed, skip
+    # deciding which slider to grab and the view itself will get mouse Events.
+    # This enables adding/deleting points.
+    def mousePressEvent(self, ev):
+        if QtWidgets.QApplication.keyboardModifiers() & QtCore.Qt.ShiftModifier:
+            pass
+        else:
+            QtWidgets.QGraphicsView.mousePressEvent(self, ev)
+
+    def mouseMoveEvent(self, ev):
+        QtWidgets.QGraphicsView.mouseMoveEvent(self, ev)
+
     # def resizeEvent(self):
     #     pass
-    
