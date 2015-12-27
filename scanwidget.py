@@ -135,6 +135,7 @@ class ScanWidget(QtWidgets.QGraphicsView):
     def __init__(self):
         self.scene = ScanScene()
         QtWidgets.QGraphicsView.__init__(self, self.scene)
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         # self.setSceneRect(self.frameGeometry()) # Ensure no scrollbars.
         
         self.minSlider = ScanSlider(color = QtGui.QColor(0,0,255,128))
