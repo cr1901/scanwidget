@@ -71,7 +71,7 @@ class ScanBox(QtWidgets.QWidget):
 class ScanSlider(QtWidgets.QGraphicsObject):
     sigPosChanged = QtCore.pyqtSignal(float)
     
-    def __init__(self, pxSize = 20, color = QtGui.QBrush(QtGui.QColor(128,128,128,128))):
+    def __init__(self, pxSize = 20, color = QtGui.QColor(128,128,128,128)):
         QtWidgets.QGraphicsItem.__init__(self)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIgnoresTransformations, True)
