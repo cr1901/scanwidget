@@ -44,7 +44,7 @@ def main():
     
     for s in spinboxes:
         if type(s) is QtWidgets.QDoubleSpinBox:
-            s.setDecimals(3)
+            s.setDecimals(17)
             s.setMaximum(float("Inf"))
             s.setMinimum(float("-Inf"))
         else:
@@ -61,10 +61,17 @@ def main():
     scanner.sigNumChanged.connect(spinboxes[2].setValue)
     spinboxes[0].valueChanged.connect(scanner.setMin)
     spinboxes[1].valueChanged.connect(scanner.setMax)
+    spinboxes[2].valueChanged.connect(scanner.setNumPoints)
     
 
     win.setCentralWidget(container)
     win.show()
+    # BUG: MouseMoveEvents are not honored at this scale.
+    # scanner.setMax(1.0e15)
+    # scanner.setMin(-1.0e15)
+    # BUG: Read as zero.
+    # scanner.setMax(1.0e-12)
+    # scanner.setMin(-1.0e-12)
     loop.run_until_complete(win.exit_request.wait())
 
 
