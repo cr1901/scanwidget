@@ -21,18 +21,23 @@ class ScanAxis(QtWidgets.QGraphicsWidget):
         dispMin = sceneRect.left()
         dispMax = sceneRect.right()
         # dispRange = dispMax - dispMin
-        painter.drawLine(dispMin, 1, dispMax, 1)
+        painter.drawLine(dispMin, -4, dispMax, -4) #Qt Bug? If > -4, line is
+        # erased during drag. Scene doesn't tell axis to repaint itself?
         realMin = self.proxy.sceneToReal(dispMin)
         realMax = self.proxy.sceneToReal(dispMax)
         realRange = realMax - realMin
         
-        majorTickInc = self.nearestPow10(realRange)
+        majorTickInc = self.floorPow10(realRange/2)
         numMajorTicks = realRange/majorTickInc
-        firstMajorTick = self.nearestPow10(realMin)
-        lastMajorTick = self.nearestPow10(realMax)
+        firstMajorTick = self.nearestMultipleRoundUp(realMin, majorTickInc)
+        lastMajorTick = self.nearestMultipleRoundDown(realMax, majorTickInc)
         
-        for x in range(firstMajorTick, lastMajorTick, majorTickInc):
+        
+        print(firstMajorTick, lastMajorTick, majorTickInc)
+        # The "+ majorTickInc" is so that the range is inclusive.
+        for x in range(firstMajorTick, lastMajorTick + majorTickInc, majorTickInc):
             painter.drawLine(self.proxy.realToScene(x), 5, self.proxy.realToScene(x), -5)
+            painter.drawText(self.proxy.realToScene(x), -10, str(x))
         
         # Major ticks
         # for i in range(
@@ -40,13 +45,20 @@ class ScanAxis(QtWidgets.QGraphicsWidget):
         # # Minor ticks
         # for i in range(dispMin, dispMax, 
         
-    def nearestPow10(self, val):
+    def floorPow10(self, val):
         if val > 0:
-            return 10**round(math.log10(val))
+            return 10**math.floor(math.log10(val))
         elif val < 0:
-            return -10**round(math.log10(abs(val)))
+            return -10**math.floor(math.log10(abs(val)))
         else:
             return 0
+
+    # Only use this function in 
+    def nearestMultipleRoundUp(self, val, multiple):
+        return math.ceil(val/multiple)*multiple
+    
+    def nearestMultipleRoundDown(self, val, multiple):
+        return math.floor(val/multiple)*multiple 
 
 
 class DataPoint(QtWidgets.QGraphicsEllipseItem):
@@ -207,6 +219,7 @@ class ScanView(QtWidgets.QGraphicsView):
         else:
             QtWidgets.QGraphicsView.mouseMoveEvent(self, ev)
 
+    # Force the scene's boundingRect to match the view.
     def resizeEvent(self, ev):
         QtWidgets.QGraphicsView.resizeEvent(self, ev)
         self.centerOn(0, 0)
