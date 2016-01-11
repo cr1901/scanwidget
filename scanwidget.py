@@ -28,20 +28,27 @@ class ScanAxis(QtWidgets.QGraphicsWidget):
         realRange = realMax - realMin
         
         majorTickInc = self.floorPow10(realRange/2)
-        numMajorTicks = realRange/majorTickInc
+        numMajorTicks = math.ceil(realRange/majorTickInc)
         firstMajorTick = self.nearestMultipleRoundUp(realMin, majorTickInc)
         lastMajorTick = self.nearestMultipleRoundDown(realMax, majorTickInc)
         
         
         print(firstMajorTick, lastMajorTick, majorTickInc)
+        # Does not work due to floating point increment.
         # The "+ majorTickInc" is so that the range is inclusive.
-        for x in range(firstMajorTick, lastMajorTick + majorTickInc, majorTickInc):
-            painter.drawLine(self.proxy.realToScene(x), 5, self.proxy.realToScene(x), -5)
-            painter.drawText(self.proxy.realToScene(x), -10, str(x))
+        # for x in range(firstMajorTick, lastMajorTick + majorTickInc, majorTickInc):
+        #     painter.drawLine(self.proxy.realToScene(x), 5, self.proxy.realToScene(x), -5)
+        #     painter.drawText(self.proxy.realToScene(x), -10, str(x))
         
-        # Major ticks
-        # for i in range(
-        # 
+        for x in range(numMajorTicks):
+            nextTick = firstMajorTick + x*majorTickInc
+            print(nextTick)
+            tickLabel = str(nextTick) # May need to be reformatted.
+            # tickLabel = "{:.1e}".format(nextTick)
+            painter.drawLine(self.proxy.realToScene(nextTick), 5, \
+                self.proxy.realToScene(nextTick), -5)
+            painter.drawText(self.proxy.realToScene(nextTick), -10, tickLabel)
+
         # # Minor ticks
         # for i in range(dispMin, dispMax, 
         
@@ -180,9 +187,6 @@ class ScanView(QtWidgets.QGraphicsView):
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         # self.setResizeAnchor(QtWidgets.QGraphicsView.AnchorViewCenter )
-        
-        # Debug Item to visualize origin.
-        self.scene.addItem(DataPoint(color = QtGui.QColor(0,0,0)))
 
     def zoomOut(self):
         pass
@@ -246,7 +250,8 @@ class ScanView(QtWidgets.QGraphicsView):
 class ScanSceneProxy(QtCore.QObject):
     def __init__(self, scene):
         self.scene = scene
-        self.units = Fraction(1, 1) # Amount slider moved from user's POV per 
+        self.units = Fraction.from_float(1.0e-15)
+        # self.units = Fraction(1, 1) # Amount slider moved from user's POV per 
         # increment by one unit in the scene.
         self.bias = 0 # Number of units from scene's origin in +/- x-direction
 
@@ -256,7 +261,7 @@ class ScanSceneProxy(QtCore.QObject):
         self.numPoints = 10
 
     def realToScene(self, val):
-        return float(Fraction(1, self.units) * Fraction.from_float(val)) + self.bias
+        return float(Fraction(1, self.units) * Fraction.from_float(val-self.bias))
 
     def sceneToReal(self, val):
         return float(Fraction.from_float(val) * self.units) + self.bias
