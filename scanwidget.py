@@ -89,8 +89,15 @@ class ScanScene(QtWidgets.QGraphicsScene):
         print("Pos: ", ev.scenePos())
         QtWidgets.QGraphicsScene.mouseMoveEvent(self, ev)
 
+    # We need to register items later b/c axis and datapoints reference the
+    # proxy for information, but proxy needs the scene to have been created.
     def registerItems(self, axis, minSlider, maxSlider):
-        pass
+        self.axis = axis
+        self.minSlider = minSlider
+        self.maxSlider = maxSlider
+        self.addItem(axis)
+        self.addItem(minSlider)
+        self.addItem(maxSlider)
 
     # def mouseMoveEvent(self, ev):
     #     
@@ -184,9 +191,7 @@ class ScanSlider(QtWidgets.QGraphicsObject):
 
 # TODO: On a resize, should the spinbox's default increment change?
 class ScanView(QtWidgets.QGraphicsView): 
-    def __init__(self, zoomInc = 1.2):
-        self.zoomInc = zoomInc
-        # self.scene = ScanScene()
+    def __init__(self):
         QtWidgets.QGraphicsView.__init__(self)
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
@@ -296,7 +301,7 @@ class ScanWidget(QtWidgets.QWidget):
         QtWidgets.QWidget.__init__(self)
 
         scene = ScanScene()
-        self.view = ScanView(zoomInc)
+        self.view = ScanView()
         self.view.setScene(scene)
         self.proxy = ScanSceneProxy(scene)
         self.zoomFitButton = QtWidgets.QPushButton("Zoom to Fit")
@@ -311,11 +316,9 @@ class ScanWidget(QtWidgets.QWidget):
         axis = ScanAxis(self.proxy)
         minSlider = ScanSlider(color = QtGui.QColor(0,0,255,128))
         maxSlider = ScanSlider(color = QtGui.QColor(255,0,0,128))
-        scene.addItem(axis)
-        scene.addItem(minSlider)
-        scene.addItem(maxSlider)
+        scene.registerItems(axis, minSlider, maxSlider)
 
-        # connect(self.
+        # Connect signals.
         minSlider.sigPosChanged.connect(self.proxy.sigMinMoved)
         maxSlider.sigPosChanged.connect(self.proxy.sigMaxMoved)
 
