@@ -98,6 +98,7 @@ class ScanScene(QtWidgets.QGraphicsScene):
         self.addItem(axis)
         self.addItem(minSlider)
         self.addItem(maxSlider)
+        # self.
 
     # def mouseMoveEvent(self, ev):
     #     
@@ -265,10 +266,10 @@ class ScanSceneProxy(QtCore.QObject):
     def __init__(self, scene):
         QtCore.QObject.__init__(self)
         self.scene = scene
-        self.units = Fraction.from_float(1.0e-15)
+        self.units = Fraction.from_float(1.0e-16)
         # self.units = Fraction(1, 1) # Amount slider moved from user's POV per 
         # increment by one unit in the scene.
-        self.bias = 0 # Number of units from scene's origin in +/- x-direction
+        self.bias = 1 # Number of units from scene's origin in +/- x-direction
 
         # Real value of sliders.
         self.min = 0
@@ -283,7 +284,21 @@ class ScanSceneProxy(QtCore.QObject):
 
     def moveMax(self, val):
         pass
-    
+
+    # TODO: Any way to get rid of assumption that scene will have a
+    # max/minSlider field?
+    def getMax(self):
+        return self.sceneToReal(self.scene.maxSlider.pos().x())
+
+    def getMin(self):
+        return self.sceneToReal(self.scene.minSlider.pos().x())
+
+    def maxChanged(self): 
+        self.sigMaxValChanged.emit(self.getMax())
+
+    def minChanged(self):
+        self.sigMinValChanged.emit(self.getMin())
+        
     # def sigMaxMoved
     # def recalculateBias(self, newMin, newMax):
     #     
@@ -319,8 +334,12 @@ class ScanWidget(QtWidgets.QWidget):
         scene.registerItems(axis, minSlider, maxSlider)
 
         # Connect signals.
-        minSlider.sigPosChanged.connect(self.proxy.sigMinMoved)
-        maxSlider.sigPosChanged.connect(self.proxy.sigMaxMoved)
+        # min/maxChanged fcns will convert data from pixel coordinates to
+        # real coordinates, then emit sigMin/MaxChanged.
+        minSlider.xChanged.connect(self.proxy.minChanged)
+        maxSlider.xChanged.connect(self.proxy.maxChanged)
+        self.proxy.sigMinValChanged.connect(self.sigMinChanged)
+        self.proxy.sigMaxValChanged.connect(self.sigMaxChanged)
 
         self.zoomFitButton.clicked.connect(self.zoomToFit)
         self.fitViewButton.clicked.connect(self.fitToView)
