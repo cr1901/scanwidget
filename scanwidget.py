@@ -26,13 +26,13 @@ class ScanAxis(QtWidgets.QGraphicsWidget):
         realMin = self.proxy.sceneToReal(dispMin)
         realMax = self.proxy.sceneToReal(dispMax)
         realRange = realMax - realMin
-        
+
         majorTickInc = self.floorPow10(realRange/2)
         numMajorTicks = math.ceil(realRange/majorTickInc)
         firstMajorTick = self.nearestMultipleRoundUp(realMin, majorTickInc)
         lastMajorTick = self.nearestMultipleRoundDown(realMax, majorTickInc)
-        
-        
+
+
         print(firstMajorTick, lastMajorTick, majorTickInc)
         # Does not work due to floating point increment.
         # The "+ majorTickInc" is so that the range is inclusive.
@@ -81,12 +81,16 @@ class DataPoint(QtWidgets.QGraphicsEllipseItem):
 # the ScanSliders (in particular, constraining movement to the x-axis).
 # TODO: SceneRect only ever has to be as large in the Y-direction as the sliders.
 class ScanScene(QtWidgets.QGraphicsScene):
+    (Axis, MinSlider, MaxSlider, DataPoints) = range(4)
     def __init__(self):
         QtWidgets.QGraphicsScene.__init__(self)
 
     def mouseMoveEvent(self, ev):
         print("Pos: ", ev.scenePos())
         QtWidgets.QGraphicsScene.mouseMoveEvent(self, ev)
+
+    def registerItems(self, axis, minSlider, maxSlider):
+        pass
 
     # def mouseMoveEvent(self, ev):
     #     
@@ -182,8 +186,8 @@ class ScanSlider(QtWidgets.QGraphicsObject):
 class ScanView(QtWidgets.QGraphicsView): 
     def __init__(self, zoomInc = 1.2):
         self.zoomInc = zoomInc
-        self.scene = ScanScene()
-        QtWidgets.QGraphicsView.__init__(self, self.scene)
+        # self.scene = ScanScene()
+        QtWidgets.QGraphicsView.__init__(self)
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         # self.setResizeAnchor(QtWidgets.QGraphicsView.AnchorViewCenter )
@@ -235,7 +239,7 @@ class ScanView(QtWidgets.QGraphicsView):
         # manually set. We want them coupled, but without the default rules
         # that Scene uses to set its SceneRect size.
         self.setSceneRect(sceneRectFromViewport)
-        self.scene.setSceneRect(sceneRectFromViewport)
+        self.scene().setSceneRect(sceneRectFromViewport)
         
         # A resize will automatically fitToView to avoid having sliders go
         # out of bounds.
@@ -248,7 +252,13 @@ class ScanView(QtWidgets.QGraphicsView):
 # Synchronization is maintained by limiting the access to members to functions
 # either called by signals, or recalculated on request.
 class ScanSceneProxy(QtCore.QObject):
+    sigMaxMoved = QtCore.pyqtSignal(float)
+    sigMinMoved = QtCore.pyqtSignal(float)
+    sigMinValChanged = QtCore.pyqtSignal(float)
+    sigMaxValChanged = QtCore.pyqtSignal(float)
+
     def __init__(self, scene):
+        QtCore.QObject.__init__(self)
         self.scene = scene
         self.units = Fraction.from_float(1.0e-15)
         # self.units = Fraction(1, 1) # Amount slider moved from user's POV per 
@@ -269,6 +279,7 @@ class ScanSceneProxy(QtCore.QObject):
     def moveMax(self, val):
         pass
     
+    # def sigMaxMoved
     # def recalculateBias(self, newMin, newMax):
     #     
     # Monitor all events sent to QGraphicsScene and update internal state
@@ -283,8 +294,11 @@ class ScanWidget(QtWidgets.QWidget):
     
     def __init__(self, zoomInc = 1.2):
         QtWidgets.QWidget.__init__(self)
+
+        scene = ScanScene()
         self.view = ScanView(zoomInc)
-        self.proxy = ScanSceneProxy(self.view.scene)
+        self.view.setScene(scene)
+        self.proxy = ScanSceneProxy(scene)
         self.zoomFitButton = QtWidgets.QPushButton("Zoom to Fit")
         self.fitViewButton = QtWidgets.QPushButton("Fit to View")
 
@@ -297,11 +311,13 @@ class ScanWidget(QtWidgets.QWidget):
         axis = ScanAxis(self.proxy)
         minSlider = ScanSlider(color = QtGui.QColor(0,0,255,128))
         maxSlider = ScanSlider(color = QtGui.QColor(255,0,0,128))
-        self.view.scene.addItem(axis)
-        self.view.scene.addItem(minSlider)
-        self.view.scene.addItem(maxSlider)
-        minSlider.sigPosChanged.connect(self.sigMinChanged)
-        maxSlider.sigPosChanged.connect(self.sigMaxChanged)
+        scene.addItem(axis)
+        scene.addItem(minSlider)
+        scene.addItem(maxSlider)
+
+        # connect(self.
+        minSlider.sigPosChanged.connect(self.proxy.sigMinMoved)
+        maxSlider.sigPosChanged.connect(self.proxy.sigMaxMoved)
 
         self.zoomFitButton.clicked.connect(self.zoomToFit)
         self.fitViewButton.clicked.connect(self.fitToView)
