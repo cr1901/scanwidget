@@ -16,12 +16,20 @@ class ScanAxis(QtWidgets.QGraphicsWidget):
         QtWidgets.QGraphicsWidget.__init__(self)
         self.proxy = proxy
 
+    def boundingRect(self):
+        penWidth = 1 # Not user-settable.
+        # sceneRect = self.scene().sceneRect()
+        # If bounding box does not cover whole polygon, trails will be left
+        # when the object is moved.
+        return QtCore.QRectF(-200, -20, \
+            400, 40)
+
     def paint(self, painter, op, widget):
         sceneRect = self.scene().sceneRect()
         dispMin = sceneRect.left()
         dispMax = sceneRect.right()
         # dispRange = dispMax - dispMin
-        painter.drawLine(dispMin, -4, dispMax, -4) #Qt Bug? If > -4, line is
+        painter.drawLine(dispMin, -1, dispMax, -1) #Qt Bug? If > -4, line is
         # erased during drag. Scene doesn't tell axis to repaint itself?
         realMin = self.proxy.sceneToReal(dispMin)
         realMax = self.proxy.sceneToReal(dispMax)
@@ -60,7 +68,6 @@ class ScanAxis(QtWidgets.QGraphicsWidget):
         else:
             return 0
 
-    # Only use this function in 
     def nearestMultipleRoundUp(self, val, multiple):
         return math.ceil(val/multiple)*multiple
     
@@ -123,12 +130,10 @@ class ScanScene(QtWidgets.QGraphicsScene):
 # ScanScene must handle object collisions.
 # * Subclassed from QGraphicsObject to get signal functionality.
 class ScanSlider(QtWidgets.QGraphicsObject):
-    sigPosChanged = QtCore.pyqtSignal(float)
     sigBoundsUpdate = QtCore.pyqtSignal()
     
     def __init__(self, pxSize = 20, color = QtGui.QColor(128,128,128,128), bounds = 1/6):
         QtWidgets.QGraphicsItem.__init__(self)
-        self.xChanged.connect(self.emitSigPosChanged)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsMovable, True)
         self.setFlag(QtWidgets.QGraphicsItem.ItemIgnoresTransformations, True)
         self.setFlag(QtWidgets.QGraphicsItem.ItemSendsGeometryChanges, True)
@@ -156,9 +161,6 @@ class ScanSlider(QtWidgets.QGraphicsObject):
         painter.setPen(self.color)
         painter.drawConvexPolygon(self.shape)
 
-    def emitSigPosChanged(self):
-        self.sigPosChanged.emit(self.scenePos().x())
-
     # Constrain movement to X axis and ensure that the sliders (bounding box?)
     # do not leave the scene.
     # TODO: Resize event for the scene should maintain current slider
@@ -181,9 +183,13 @@ class ScanSlider(QtWidgets.QGraphicsObject):
             print("newPos: ", newPos)
             
             if not boundsRect.contains(newPos):
-                self.sigBoundsUpdate.emit()
                 newPos.setX(self.pos().x()) # Keep sliders in scene at least
                 # self.bounds fraction from edge. And send a boundsUpdate.
+                print("sigBoundsUpdate")
+                self.sigBoundsUpdate.emit()
+                self.xChanged.emit() # If incrementing a spinbox caused the
+                # sliders to go out of bounds, we need to notify the spinboxes
+                # that the increment was not honored and restore the original value.
                 
 
             return newPos
@@ -192,21 +198,12 @@ class ScanSlider(QtWidgets.QGraphicsObject):
 
 # TODO: On a resize, should the spinbox's default increment change?
 class ScanView(QtWidgets.QGraphicsView): 
+    sigZoom = QtCore.pyqtSignal(int)
     def __init__(self):
         QtWidgets.QGraphicsView.__init__(self)
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         # self.setResizeAnchor(QtWidgets.QGraphicsView.AnchorViewCenter )
-
-    def zoomOut(self):
-        pass
-        # self.scale(1/self.zoomInc, 1)
-        # print(self.transform().m11())
-
-    def zoomIn(self):
-        pass
-        # self.scale(self.zoomInc, 1)
-        # print(self.transform().m11())
 
     def wheelEvent(self, ev):
         # if ev.delta() > 0: # TODO: Qt-4 specific.
@@ -214,9 +211,9 @@ class ScanView(QtWidgets.QGraphicsView):
         # TODO: If shift modifier is pressed and scroll-wheel is grazed, should
         # we honor zoom requests?
         if ev.angleDelta().y() > 0:
-            self.zoomIn()
+            self.sigZoom.emit(1)
         else:
-            self.zoomOut()
+            self.sigZoom.emit(-1)
 
     # Items in scene grab mouse in this function. If shift is pressed, skip
     # deciding which slider to grab and the view itself will get mouse Events.
@@ -257,6 +254,9 @@ class ScanView(QtWidgets.QGraphicsView):
 # to the user and how they map to the sliders/data stored in the scene.
 # Synchronization is maintained by limiting the access to members to functions
 # either called by signals, or recalculated on request.
+# ScanScene and ScanSliders know nothing about the mapping (ScanAxis does).
+# Consequently, they cannot distinguish an xChanged from having their value
+# changed versus a change in the mapping.
 class ScanSceneProxy(QtCore.QObject):
     sigMaxMoved = QtCore.pyqtSignal(float)
     sigMinMoved = QtCore.pyqtSignal(float)
@@ -266,14 +266,12 @@ class ScanSceneProxy(QtCore.QObject):
     def __init__(self, scene):
         QtCore.QObject.__init__(self)
         self.scene = scene
-        self.units = Fraction.from_float(1.0e-16)
-        # self.units = Fraction(1, 1) # Amount slider moved from user's POV per 
-        # increment by one unit in the scene.
+        # self.units = Fraction.from_float(1.0e-16)
+        self.units = Fraction(1, 1) # Amount slider moved from user's POV per 
+        # increment by one unit (pixel) in the scene.
         self.bias = 1 # Number of units from scene's origin in +/- x-direction
 
         # Real value of sliders.
-        self.min = 0
-        self.max = 0
         self.numPoints = 10
 
     def realToScene(self, val):
@@ -283,7 +281,20 @@ class ScanSceneProxy(QtCore.QObject):
         return float(Fraction.from_float(val) * self.units) + self.bias
 
     def moveMax(self, val):
-        pass
+        desiredX = self.realToScene(val)
+        currentX = self.scene.maxSlider.pos().x()
+        # Prevent signal recursion if the value sent equals the current
+        # position of the slider in the scene.
+        if desiredX != currentX:
+            self.scene.maxSlider.setX(desiredX)
+
+    def moveMin(self, val):
+        desiredX = self.realToScene(val)
+        currentX = self.scene.minSlider.pos().x()
+        # Prevent signal recursion if the value sent equals the current
+        # position of the slider in the scene.
+        if desiredX != currentX:
+            self.scene.minSlider.setX(desiredX)
 
     # TODO: Any way to get rid of assumption that scene will have a
     # max/minSlider field?
@@ -300,7 +311,28 @@ class ScanSceneProxy(QtCore.QObject):
         self.sigMinValChanged.emit(self.getMin())
         
     # def sigMaxMoved
-    # def recalculateBias(self, newMin, newMax):
+    def recalculateUnitsOnBounds(self):
+        pass
+
+
+    def handleZoom(self, zoomDir):
+        if zoomDir > 0:
+            self.recalculateUnitsOnZoom(Fraction(1, 5))
+        else:
+            self.recalculateUnitsOnZoom(Fraction(6, 5))
+        
+    # def setZoom(self,
+
+    # zoomFactor should be a fraction.
+    def recalculateUnitsOnZoom(self, zoomFactor):
+        currMax = self.getMax()
+        currMin = self.getMin()
+        self.units = self.units * zoomFactor
+        self.moveMax(currMax)
+        self.moveMin(currMin)
+        self.scene.axis.update()
+        
+
     #     
     # Monitor all events sent to QGraphicsScene and update internal state
     # accordingly.
@@ -332,6 +364,7 @@ class ScanWidget(QtWidgets.QWidget):
         minSlider = ScanSlider(color = QtGui.QColor(0,0,255,128))
         maxSlider = ScanSlider(color = QtGui.QColor(255,0,0,128))
         scene.registerItems(axis, minSlider, maxSlider)
+        
 
         # Connect signals.
         # min/maxChanged fcns will convert data from pixel coordinates to
@@ -341,25 +374,18 @@ class ScanWidget(QtWidgets.QWidget):
         self.proxy.sigMinValChanged.connect(self.sigMinChanged)
         self.proxy.sigMaxValChanged.connect(self.sigMaxChanged)
 
+        self.view.sigZoom.connect(self.proxy.handleZoom)
+
         self.zoomFitButton.clicked.connect(self.zoomToFit)
         self.fitViewButton.clicked.connect(self.fitToView)
 
 
 # Attach these to the sliders and pushbutton signals respectively.
     def setMax(self, val):
-        pass
-        # emitting sigPosChanged might be moved to setPos. This will prevent
-        # infinite recursion in that case.
-        # if val != self.max: # WARNING: COMPARING FLOATS!
-        #    pass
-            # self.maxSlider.setPos(QtCore.QPointF(val, 0))
-        # self.update() # Might be needed, but paint seems to occur correctly.
+        self.proxy.moveMax(val)
 
     def setMin(self, val):
-        pass
-        # if val != self.min: # WARNING: COMPARING FLOATS!
-        #    pass
-            # self.minSlider.setPos(QtCore.QPointF(val, 0))
+        self.proxy.moveMin(val)
 
     def setNumPoints(self, val):
         pass
