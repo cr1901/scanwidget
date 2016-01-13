@@ -9,20 +9,18 @@ from fractions import Fraction
 #
 # If the width is smaller than a certain threshold, the major ticks become
 # minor ticks, and the minor ticks are deleted as objects.
-# Because ScanAxis needs knowledge of units, it keeps a reference to the
-# ScanSceneProxy.
+# Because ScanAxis needs knowledge of units and viewport, it keeps a reference to the
+# ScanSceneProxy and View.
 class ScanAxis(QtWidgets.QGraphicsWidget):
     def __init__(self, proxy):
         QtWidgets.QGraphicsWidget.__init__(self)
         self.proxy = proxy
+        self.boundingRectCopy = QtCore.QRectF()
 
     def boundingRect(self):
         penWidth = 1 # Not user-settable.
         # sceneRect = self.scene().sceneRect()
-        # If bounding box does not cover whole polygon, trails will be left
-        # when the object is moved.
-        return QtCore.QRectF(-200, -20, \
-            400, 40)
+        return self.boundingRectCopy
 
     def paint(self, painter, op, widget):
         sceneRect = self.scene().sceneRect()
@@ -105,18 +103,19 @@ class ScanScene(QtWidgets.QGraphicsScene):
         self.addItem(axis)
         self.addItem(minSlider)
         self.addItem(maxSlider)
-        # self.
 
-    # def mouseMoveEvent(self, ev):
-    #     
-    # def mouseClickEvent(self, ev):
-    #     pass
-    # 
-    # def mouseDragEvent(self, ev):
-    #     pass
-    # 
-    # def keyPressEvent(self, ev):
-
+    # Get a rectangle in scene coords that is at the same position as sceneRect
+    # but is smaller on each side by bounds proportion.
+    def getCenteredRect(self, bounds):
+        rect = self.sceneRect() #sceneRect will always match displayed.
+        boundsRect = QtCore.QRectF(rect) # Create a copy.
+        boundsLeft = bounds * rect.width()
+        boundsRect.translate(boundsLeft, 0)
+        boundsWidth = ((1 - 2 * bounds) * rect.width())
+        assert(boundsWidth > 0) # Something really went wrong if this fails.
+        boundsRect.setWidth(boundsWidth)
+        return boundsRect
+        
 
 # Needs to be subclassed from QGraphicsItem* b/c Qt will not send mouse events
 # to GraphicsItems that do not reimplement mousePressEvent (How does Qt know?).
@@ -170,15 +169,9 @@ class ScanSlider(QtWidgets.QGraphicsObject):
         if change == QtWidgets.QGraphicsItem.ItemPositionChange:
             newPos = val
             newPos.setY(0) # Constrain movement to X-axis of parent.
+            boundsRect = self.scene().getCenteredRect(self.bounds)
 
-            rect = self.scene().sceneRect() #sceneRect will always match displayed.
-            boundsRect = QtCore.QRectF(rect) # Create a copy.
-            boundsLeft = self.bounds * rect.width()
-            boundsRect.translate(boundsLeft, 0)
-            boundsWidth = ((1 - 2 * self.bounds) * rect.width())
-            assert(boundsWidth > 0) # Something really went wrong if this fails.
-            boundsRect.setWidth(boundsWidth)
-            print("sceneRect: ", rect)
+            print("sceneRect: ", self.scene().sceneRect())
             print("boundsRect: ", boundsRect)
             print("newPos: ", newPos)
             
@@ -232,11 +225,26 @@ class ScanView(QtWidgets.QGraphicsView):
 
     # Force the scene's boundingRect to match the view.
     def resizeEvent(self, ev):
+        # Lovely dependency hell here. aAxis must match viewport size...
+        # * Axis cannot call sceneRect() to get scene size in 
+        # boundingRect() b/c infinite recursion.
+        # * GraphicsView resizeEvent will call GraphicsScene resize event.
+        # * The axis' new size must be set manually.
+        # * Refactor into ScanScene-specific method?
+
+        
         QtWidgets.QGraphicsView.resizeEvent(self, ev)
-        self.centerOn(0, 0)
-        viewportRect = QtCore.QRect(0, 0, self.viewport().width(), \
-            self.viewport().height())
+        self.centerOn(0, 0) # Resizes to make the viewed scene smaller will
+        # be off-center without this.
+        # TODO: What is the source of the off-by-one error? Viewed scene
+        # starts drifting without this correction.
+        viewportRect = QtCore.QRect(0, 0, self.viewport().width() + 1, \
+            self.viewport().height() + 1)
+        
         sceneRectFromViewport = self.mapToScene(viewportRect).boundingRect()
+        print("sceneRectFromViewport", sceneRectFromViewport)
+        print("view.sceneRect", self.sceneRect().left(), self.sceneRect().top())
+        print("viewport rect", self.viewport().rect())
 
         # View and Scene SceneRects are coupled until one or the other is
         # manually set. We want them coupled, but without the default rules
@@ -244,10 +252,12 @@ class ScanView(QtWidgets.QGraphicsView):
         self.setSceneRect(sceneRectFromViewport)
         self.scene().setSceneRect(sceneRectFromViewport)
         
+
+        self.scene().axis.boundingRectCopy = self.scene().sceneRect()
+        self.scene().axis.prepareGeometryChange()
+        
         # A resize will automatically fitToView to avoid having sliders go
         # out of bounds.
-        
-        # self.update()
 
 
 # ScanSceneProxy communicates information between the what numbers are displayed
@@ -269,7 +279,7 @@ class ScanSceneProxy(QtCore.QObject):
         # self.units = Fraction.from_float(1.0e-16)
         self.units = Fraction(1, 1) # Amount slider moved from user's POV per 
         # increment by one unit (pixel) in the scene.
-        self.bias = 1 # Number of units from scene's origin in +/- x-direction
+        self.bias = 0 # Number of units from scene's origin in +/- x-direction
 
         # Real value of sliders.
         self.numPoints = 10
@@ -317,7 +327,7 @@ class ScanSceneProxy(QtCore.QObject):
 
     def handleZoom(self, zoomDir):
         if zoomDir > 0:
-            self.recalculateUnitsOnZoom(Fraction(1, 5))
+            self.recalculateUnitsOnZoom(Fraction(4, 5))
         else:
             self.recalculateUnitsOnZoom(Fraction(6, 5))
         
@@ -333,6 +343,18 @@ class ScanSceneProxy(QtCore.QObject):
         self.scene.axis.update()
         
 
+    def zoomToFit(self):
+        rect = self.scene.sceneRect()
+        currMax = self.getMax()
+        currMin = self.getMin()
+        currRange = (currMax - currMin)
+        self.bias = currRange/2 # Translate
+        # self.units = self.units *
+        # 
+        # if currRange > 0:
+        #     currRange
+            
+        
     #     
     # Monitor all events sent to QGraphicsScene and update internal state
     # accordingly.
