@@ -14,6 +14,11 @@ class ScanAxis(QtWidgets.QWidget):
 
     def paintEvent(self, ev):
         painter = QtGui.QPainter(self)
+        font = painter.font()
+        # fontMetric = QtGui.QFontMetrics(font)
+        avgCharWidth = QtGui.QFontMetrics(font).averageCharWidth()
+        # painter.setFont(font)
+
         # painter.setRenderHint(QtGui.QPainter.Antialiasing)
         pixMin = -self.width() / 2
         pixMax = -pixMin
@@ -23,8 +28,26 @@ class ScanAxis(QtWidgets.QWidget):
         realMax = self.proxy.pixelToReal(pixMax)
         realRange = realMax - realMin
 
-        majorTickInc = self.floorPow10(realRange / 2)
-        numMajorTicks = math.ceil(realRange / majorTickInc)
+        majorTickIncMin = self.floorPow10(realRange / 2)
+        maxLabelsWhichFit = self.maxLabels(avgCharWidth)
+        majorTickInc = majorTickIncMin
+        numMajorTicks = 0
+        for n in [0.5, 1, 2, 5]:
+            majorTicksReq = math.ceil(realRange / (n*majorTickInc))
+            if majorTicksReq > maxLabelsWhichFit:
+                continue
+            else:
+                if numMajorTicks < majorTicksReq:
+                    numMajorTicks = majorTicksReq
+                    majorTickInc = n*majorTickIncMin
+                print("numMajorTicks", numMajorTicks)
+                print("majorTicksInc", majorTickInc)
+
+        if not self.labelsFit(numMajorTicks, avgCharWidth):
+            pass
+            # AssertionError
+            # print("warning: text does not fit!")
+        
         firstMajorTick = self.nearestMultipleRoundUp(realMin, majorTickInc)
         lastMajorTick = self.nearestMultipleRoundDown(realMax, majorTickInc)
 
@@ -34,6 +57,7 @@ class ScanAxis(QtWidgets.QWidget):
             tickLabel = "{:.1e}".format(nextTick)
             painter.drawLine(self.proxy.realToPixel(nextTick), 5,
                              self.proxy.realToPixel(nextTick), -5)
+            # painter.drawText(self.proxy.realToPixel(nextTick), -20, 20, 20, QtCore.Qt.AlignLeft, tickLabel)
             painter.drawText(self.proxy.realToPixel(nextTick), -10, tickLabel)
 
     def wheelEvent(self, ev):
@@ -55,6 +79,19 @@ class ScanAxis(QtWidgets.QWidget):
         else:
             return 0
 
+    def maxLabels(self, charWidth):
+        return math.floor(self.width() / (charWidth * 8 + 1)) - 1  
+
+    def labelsFit(self, numTicks, charWidth):
+        # -X.Xe-XX has 8 chars, add numTicks - 1 so at least one pixel
+        # between consecutive labels.
+        labelSpace = (numTicks * charWidth * 8) + numTicks - 1
+        print(labelSpace)
+        return (labelSpace < self.width())
+
+    def calculateTickParams(self):
+        pass
+
     def nearestMultipleRoundUp(self, val, multiple):
         return math.ceil(val / multiple) * multiple
 
@@ -68,6 +105,12 @@ class ScanSlider(QtWidgets.QSlider):
     sigMinMoved = QtCore.pyqtSignal(int)
     sigMaxMoved = QtCore.pyqtSignal(int)
     (noSlider, minSlider, maxSlider) = range(3)
+    maxStyle = """QSlider::handle::horizontal {
+        background: #E00000
+        }"""
+    minStyle = """QSlider::handle::horizontal {
+        background: #0000E0
+        }"""
 
     def __init__(self):
         QtWidgets.QSlider.__init__(self, QtCore.Qt.Horizontal)
@@ -84,6 +127,13 @@ class ScanSlider(QtWidgets.QSlider):
         self.lowerPressed = QtWidgets.QStyle.SC_None
         self.firstMovement = False  # State var for handling slider overlap.
         self.blockTracking = False
+        
+        # We need fake sliders to keep around so that we can dynamically
+        # set the stylesheets for drawing each slider later. See paintEvent.
+        self.dummyMinSlider = QtWidgets.QSlider()
+        self.dummyMaxSlider = QtWidgets.QSlider()
+        self.dummyMinSlider.setStyleSheet(ScanSlider.minStyle)
+        self.dummyMaxSlider.setStyleSheet(ScanSlider.maxStyle)
 
     # We basically superimpose two QSliders on top of each other, discarding
     # the state that remains constant between the two when drawing.
@@ -97,7 +147,7 @@ class ScanSlider(QtWidgets.QSlider):
             opt.sliderPosition = self.maxPos
             opt.sliderValue = self.maxVal
         else:
-            pass  # AssertionError
+            pass  # AssertionErrors
 
     # We get the range of each slider separately.
     def pixelPosToRangeValue(self, pos):
@@ -117,7 +167,9 @@ class ScanSlider(QtWidgets.QSlider):
         sliderMax = gr.right() - sliderLength + 1
 
         return QtWidgets.QStyle.sliderValueFromPosition(self.minimum(),
-                                                        self.maximum(), pos - sliderMin, sliderMax - sliderMin,
+                                                        self.maximum(),
+                                                        pos - sliderMin,
+                                                        sliderMax - sliderMin,
                                                         opt.upsideDown)
 
     def rangeValueToPixelPos(self, val):
@@ -134,7 +186,9 @@ class ScanSlider(QtWidgets.QSlider):
         sliderMax = gr.right() - sliderLength + 1
 
         pixel = QtWidgets.QStyle.sliderPositionFromValue(self.minimum(),
-                                                         self.maximum(), val, sliderMax - sliderMin, opt.upsideDown)
+                                                         self.maximum(), val,
+                                                         sliderMax - sliderMin,
+                                                         opt.upsideDown)
         return pixel
 
     def handleMousePress(self, pos, control, val, handle):
@@ -282,8 +336,17 @@ class ScanSlider(QtWidgets.QSlider):
         self.upperPressed = QtWidgets.QStyle.SC_None
 
     def paintEvent(self, ev):
-        # Use a QStylePainter to make redrawing as painless as possible.
+        # Use QStylePainters to make redrawing as painless as possible.
         painter = QtWidgets.QStylePainter(self)
+        # Paint on the custom widget, using the attributes of the fake
+        # slider references we keep around. setStyleSheet within paintEvent
+        # leads to heavy performance penalties (and recursion?).
+        # QPalettes would be nicer to use, since palette entries can be set
+        # individually for each slider handle, but Windows 7 does not
+        # use them. This seems to be the only way to override the colors
+        # regardless of platform.
+        minPainter = QtWidgets.QStylePainter(self, self.dummyMinSlider)
+        maxPainter = QtWidgets.QStylePainter(self, self.dummyMaxSlider)
 
         # Groove
         opt = QtWidgets.QStyleOptionSlider()
@@ -294,14 +357,8 @@ class ScanSlider(QtWidgets.QSlider):
         painter.drawComplexControl(QtWidgets.QStyle.CC_Slider, opt)
 
         # Handles
-        self.drawHandle(painter, ScanSlider.minSlider)
-        self.drawHandle(painter, ScanSlider.maxSlider)
-        # self.initHandleStyleOption(opt, ScanSlider.maxSlider)
-        # painter.drawComplexControl(QtWidgets.QStyle.CC_Slider, opt)
-
-        # opt.sliderPosition = self.maxPos
-        # opt.sliderValue = self.maxVal
-        # painter.drawComplexControl(QtWidgets.QStyle.CC_Slider, opt)
+        self.drawHandle(minPainter, ScanSlider.minSlider)
+        self.drawHandle(maxPainter, ScanSlider.maxSlider)
 
 
 # real (Sliders) => pixel (one pixel movement of sliders would increment by X)
@@ -312,16 +369,19 @@ class ScanProxy(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self.axis = axis
         self.slider = slider
-        self.units = Fraction(1, 1)
+        # self.units = Fraction(1, 1)
+        self.units = 1
         self.bias = 0
         self.numPoints = 10
 
     def realToPixel(self, val):
-        return float(Fraction(1, self.units) * Fraction.from_float(val - self.bias))
+        return (val - self.bias)/self.units
+        # return float(Fraction(1, self.units) * Fraction.from_float(val - self.bias))
 
     # Get a point from pixel units to what the sliders display.
     def pixelToReal(self, val):
-        return float(Fraction.from_float(val) * self.units) + self.bias
+        return (val * self.units) + self.bias
+        # return float(Fraction.from_float(val) * self.units) + self.bias
 
     def moveMax(self, val):
         pass
@@ -364,14 +424,15 @@ class ScanProxy(QtCore.QObject):
     #
     def handleZoom(self, zoomDir):
         if zoomDir > 0:
-            self.recalculateUnitsOnZoom(Fraction(4, 5))
+            self.recalculateUnitsOnZoom(0.8)
         else:
-            self.recalculateUnitsOnZoom(Fraction(6, 5))
+            self.recalculateUnitsOnZoom(1/0.8)
 
     def recalculateUnitsOnZoom(self, zoomFactor, *args):
         currMax = self.getMax()
         currMin = self.getMin()
-        self.units = Fraction.from_float(float(self.units * zoomFactor))
+        # self.units = Fraction.from_float(float(self.units * zoomFactor))
+        self.units = self.units * zoomFactor
         print("units: ", self.units)
         if args:
             self.bias = args[0]
