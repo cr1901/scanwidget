@@ -2,85 +2,55 @@ import math
 
 from PyQt5 import QtGui, QtCore, QtWidgets
 from fractions import Fraction
-
+from ticker import *
 
 class ScanAxis(QtWidgets.QWidget):
-    sigZoom = QtCore.pyqtSignal(int)
+    sigZoom = QtCore.pyqtSignal(int, int)
 
     def __init__(self):
         QtWidgets.QWidget.__init__(self)
         self.proxy = None
         self.sizePolicy().setControlType(QtWidgets.QSizePolicy.ButtonBox)
+        self.ticker = Ticker()
 
     def paintEvent(self, ev):
         painter = QtGui.QPainter(self)
         font = painter.font()
-        # fontMetric = QtGui.QFontMetrics(font)
         avgCharWidth = QtGui.QFontMetrics(font).averageCharWidth()
-        # painter.setFont(font)
 
         # painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        pixMin = -self.width() / 2
-        pixMax = -pixMin
-        painter.translate(self.width() / 2, self.height() - 5)
-        painter.drawLine(pixMin, 0, pixMax, 0)
-        realMin = self.proxy.pixelToReal(pixMin)
-        realMax = self.proxy.pixelToReal(pixMax)
-        realRange = realMax - realMin
-
-        majorTickIncMin = self.floorPow10(realRange / 2)
-        maxLabelsWhichFit = self.maxLabels(avgCharWidth)
-        majorTickInc = majorTickIncMin
-        numMajorTicks = 0
-        for n in [0.5, 1, 2, 5]:
-            majorTicksReq = math.ceil(realRange / (n*majorTickInc))
-            if majorTicksReq > maxLabelsWhichFit:
-                continue
-            else:
-                if numMajorTicks < majorTicksReq:
-                    numMajorTicks = majorTicksReq
-                    majorTickInc = n*majorTickIncMin
-                print("numMajorTicks", numMajorTicks)
-                print("majorTicksInc", majorTickInc)
-
-        if not self.labelsFit(numMajorTicks, avgCharWidth):
-            pass
-            # AssertionError
-            # print("warning: text does not fit!")
+        painter.translate(0, self.height() - 5)
+        painter.drawLine(0, 0, self.width(), 0)
+        realMin = self.proxy.pixelToReal(0)
+        realMax = self.proxy.pixelToReal(self.width())
         
-        firstMajorTick = self.nearestMultipleRoundUp(realMin, majorTickInc)
-        lastMajorTick = self.nearestMultipleRoundDown(realMax, majorTickInc)
+        # At very large widths, labels may overlap slightly, since "n"
+        # is a minimum number of ticks, and ticker will try to put as many
+        # ticks possible.
+        self.ticker.n = 2
+        # self.ticker.dynamic 
+        ticks = self.ticker.ticks(realMin, realMax, None)
+        offset, mag = self.ticker.offset(ticks)
 
-        for x in range(numMajorTicks):
-            nextTick = firstMajorTick + x * majorTickInc
-            # tickLabel = str(nextTick) # May need to be reformatted.
-            tickLabel = "{:.1e}".format(nextTick)
-            painter.drawLine(self.proxy.realToPixel(nextTick), 5,
-                             self.proxy.realToPixel(nextTick), -5)
-            # painter.drawText(self.proxy.realToPixel(nextTick), -20, 20, 20, QtCore.Qt.AlignLeft, tickLabel)
-            painter.drawText(self.proxy.realToPixel(nextTick), -10, tickLabel)
+        for t in ticks:
+            tickLabel =  "{:.1e}".format(t)
+            painter.drawLine(self.proxy.realToPixel(t), 5,
+                self.proxy.realToPixel(t), -5)
+            painter.drawText(self.proxy.realToPixel(t), -10, tickLabel)
+            
+        painter.resetTransform()
+        offsetLabel = "offset: {:.1e} magnitude: {}".format(offset, mag)
+        painter.drawText(0, 10, offsetLabel)
 
     def wheelEvent(self, ev):
         # if ev.delta() > 0: # TODO: Qt-4 specific.
-        # TODO: If sliders are off screen after a zoom-in, what should we do?
         # TODO: If shift modifier is pressed and scroll-wheel is grazed, should
         # we honor zoom requests?
         if ev.angleDelta().y() > 0:
-            self.sigZoom.emit(1)
+            self.sigZoom.emit(1, ev.x())
         else:
-            self.sigZoom.emit(-1)
+            self.sigZoom.emit(-1, ev.x())
         self.update()
-
-    def floorPow10(self, val):
-        if val > 0:
-            return 10**math.floor(math.log10(val))
-        elif val < 0:
-            return -10**math.floor(math.log10(abs(val)))
-        else:
-            return 0
-
-    def maxLabels(self, charWidth):
-        return math.floor(self.width() / (charWidth * 8 + 1)) - 1  
 
     def labelsFit(self, numTicks, charWidth):
         # -X.Xe-XX has 8 chars, add numTicks - 1 so at least one pixel
@@ -89,14 +59,12 @@ class ScanAxis(QtWidgets.QWidget):
         print(labelSpace)
         return (labelSpace < self.width())
 
-    def calculateTickParams(self):
-        pass
-
-    def nearestMultipleRoundUp(self, val, multiple):
-        return math.ceil(val / multiple) * multiple
-
-    def nearestMultipleRoundDown(self, val, multiple):
-        return math.floor(val / multiple) * multiple
+    # Notify proxy of resize so that the current center actually remains the
+    # new center (barring floating point errors and even number pixel width)
+    def resizeEvent(self, ev):
+        self.proxy.bias = self.proxy.calculateBias(self.proxy.realCenter, \
+            self.proxy.units, ev.size().width())
+        QtWidgets.QWidget.resizeEvent(self, ev)
 
 
 # Reimplemented from https://gist.github.com/Riateche/27e36977f7d5ea72cf4f,
@@ -191,6 +159,16 @@ class ScanSlider(QtWidgets.QSlider):
                                                          opt.upsideDown)
         return pixel
 
+
+    # If groove and axis are not aligned (and they should be), we can use
+    # this function to calculate the offset between them.
+    def grooveX(self):
+        opt = QtWidgets.QStyleOptionSlider()
+        self.initStyleOption(opt)
+        gr = self.style().subControlRect(QtWidgets.QStyle.CC_Slider, opt,
+                                         QtWidgets.QStyle.SC_SliderGroove, self) 
+        return gr.x()
+
     def handleMousePress(self, pos, control, val, handle):
         opt = QtWidgets.QStyleOptionSlider()
         self.initHandleStyleOption(opt, handle)
@@ -249,6 +227,7 @@ class ScanSlider(QtWidgets.QSlider):
             if high != self.maxVal:
                 self.maxVal = high
                 self.maxPos = high
+                self
                 # emit
             # emit spanChanged
             self.update()
@@ -259,8 +238,7 @@ class ScanSlider(QtWidgets.QSlider):
             if not self.hasTracking():
                 self.update()
             if self.isSliderDown():
-                pass
-                # emit lowerPositionChanged
+                self.sigMinMoved.emit(self.minPos)
             if self.hasTracking() and not self.blockTracking:
                 self.setLowerValue(val)
 
@@ -270,8 +248,7 @@ class ScanSlider(QtWidgets.QSlider):
             if not self.hasTracking():
                 self.update()
             if self.isSliderDown():
-                pass
-                # emit upperPositionChanged
+                self.sigMaxMoved.emit(self.maxPos)
             if self.hasTracking() and not self.blockTracking:
                 self.setUpperValue(val)
 
@@ -359,21 +336,34 @@ class ScanSlider(QtWidgets.QSlider):
         # Handles
         self.drawHandle(minPainter, ScanSlider.minSlider)
         self.drawHandle(maxPainter, ScanSlider.maxSlider)
-
+        
 
 # real (Sliders) => pixel (one pixel movement of sliders would increment by X)
 # => range (minimum granularity that sliders understand).
 class ScanProxy(QtCore.QObject):
+    sigMinMoved = QtCore.pyqtSignal(float)
+    sigMaxMoved = QtCore.pyqtSignal(float)
 
     def __init__(self, slider, axis):
         QtCore.QObject.__init__(self)
         self.axis = axis
         self.slider = slider
-        # self.units = Fraction(1, 1)
-        self.units = 1
-        self.bias = 0
+        self.units = 1 # real = pixel * units + bias
+        self.bias = self.calculateBias(0.0, 1.0, self.axis.width())
+        self.realCenter = 0.0 # We need to keep a copy around in case of
+        # resizeEvent. In all other cases where mapping changes, this will be
+        # recalculated.
+        self.realMin = 0
+        self.realMax = 0
         self.numPoints = 10
 
+    # What real value should map to the axis center? This doesn't depend on
+    # any public members so we can make decisions about centering during
+    # resize and zoom events.
+    def calculateBias(self, targetRealCenter, targetUnit, axisWidth):
+        return targetRealCenter - (targetUnit * axisWidth/2)        
+
+    #pixel vals for sliders: 0 to slider_width - 1
     def realToPixel(self, val):
         return (val - self.bias)/self.units
         # return float(Fraction(1, self.units) * Fraction.from_float(val - self.bias))
@@ -383,66 +373,89 @@ class ScanProxy(QtCore.QObject):
         return (val * self.units) + self.bias
         # return float(Fraction.from_float(val) * self.units) + self.bias
 
+    def rangeToReal(self, val):
+        gx = self.slider.grooveX()
+        ax = self.axis.x()
+        # assert gx == ax, "gx: {}, ax: {}".format(gx, ax)
+        pixelVal = self.slider.rangeValueToPixelPos(val)
+        return self.pixelToReal(pixelVal)
+
+    def realToRange(self, val):
+        pixelVal = self.realToPixel(val)
+        return self.slider.pixelPosToRangeValue(pixelVal)
+
     def moveMax(self, val):
-        pass
-    #    proxyX = self.realToPixel(val)
-    #    desiredSliderX = self.slider.pixelPosToRangeValue(proxyX)
-    #    currentSliderX = self.slider.maxPos
-    #
-    #    # Signal recursion guard.
-    #    if desiredSliderX != currentSliderX:
-    #        self.slider.setUpperPosition(desiredSliderX)
+        sliderX = self.realToRange(val)
+        self.slider.setUpperPosition(sliderX)
+        self.realMax = val
 
     def moveMin(self, val):
-        pass
-    #     desiredX = self.realToScene(val)
-    #     currentX = self.scene.minSlider.pos().x()
-    #     # Prevent signal recursion if the value sent equals the current
-    #     # position of the slider in the scene.
-    #     if desiredX != currentX:
-    #         self.scene.minSlider.setX(desiredX)
-    #
-    # # TODO: Any way to get rid of assumption that scene will have a
-    # # max/minSlider field?
+        sliderX = self.realToRange(val)
+        self.slider.setLowerPosition(sliderX)
+        self.realMin = val
 
-    def getMax(self):
-        pass
-        # return self.sceneToReal(self.scene.maxSlider.pos().x())
+    def handleMaxMoved(self, rangeVal):  
+        self.sigMaxMoved.emit(self.rangeToReal(rangeVal))
 
-    def getMin(self):
-        pass
-        # return self.sceneToReal(self.scene.minSlider.pos().x())
+    def handleMinMoved(self, rangeVal):
+        self.sigMinMoved.emit(self.rangeToReal(rangeVal))
 
-    # def maxChanged(self):
-    #     self.sigMaxValChanged.emit(self.getMax())
-    #
-    # def minChanged(self):
-    #     self.sigMinValChanged.emit(self.getMin())
-    #
-    # def recalculateUnitsOnBounds(self):
-    #     pass
-    #
-    def handleZoom(self, zoomDir):
+    def handleZoom(self, zoomDir, mouseX):
         if zoomDir > 0:
-            self.recalculateUnitsOnZoom(0.8)
+            self.recalculateUnitsOnZoom(0.8, mouseX)
         else:
-            self.recalculateUnitsOnZoom(1/0.8)
+            self.recalculateUnitsOnZoom(1/0.8, mouseX)
 
-    def recalculateUnitsOnZoom(self, zoomFactor, *args):
-        currMax = self.getMax()
-        currMin = self.getMin()
-        # self.units = Fraction.from_float(float(self.units * zoomFactor))
-        self.units = self.units * zoomFactor
+    def recalculateUnitsOnZoom(self, zoomFactor, mouseXPos):
+        # We need to figure out what new value is to be centered in the axis
+        # display.
+        # Halfway between the mouse zoom and the oldCenter should be fine.
+        oldCenter = self.axis.width()/2
+        newCenter = (oldCenter + mouseXPos)/2
+        newUnits = self.units * zoomFactor
+        newRealCenter = self.pixelToReal(newCenter)
+        newBias = self.calculateBias(newRealCenter, newUnits, self.axis.width())
+        
+        self.units = newUnits
+        self.bias = newBias
+        self.realCenter = newRealCenter
         print("units: ", self.units)
-        if args:
-            self.bias = args[0]
         print("bias: ", self.bias)
-        self.moveMax(currMax)
-        self.moveMin(currMin)
-        # self.axis.repaint() # No longer works for some reason...
+        print("realCenter: ", self.realCenter)
+        self.moveMax(self.realMax)
+        self.moveMin(self.realMin)
 
+    def zoomToFit(self):
+        newRealCenter = (self.realMin + self.realMax)/2
+        currRangeReal = abs(self.realMax - self.realMin)
+        newUnits = (currRangeReal)/(3*self.axis.width()) 
+        newBias = self.calculateBias(newRealCenter, newUnits, self.axis.width())
 
+        self.units = newUnits
+        self.bias = newBias
+        self.realCenter = newRealCenter
+        print("units: ", self.units)
+        print("bias: ", self.bias)
+        print("realCenter: ", self.realCenter)
+        self.moveMax(self.realMax)
+        self.moveMin(self.realMin)
+        self.axis.update()
+        
+
+    def fitToView(self):
+        sliderRange = self.slider.maximum() - self.slider.minimum()
+        assert sliderRange > 0
+        self.slider.setLowerPosition(round((1.0/3.0)*sliderRange))
+        self.slider.setUpperPosition(round((2.0/3.0)*sliderRange))
+        # Signals won't fire unless slider was actually grabbed, so
+        # manually update.
+        self.handleMaxMoved(self.slider.maxVal)
+        self.handleMinMoved(self.slider.minVal)
+        
+# BUG: When zoom in for long periods, max will equal min. Floating point errors?
 class ScanWidget(QtWidgets.QWidget):
+    sigMinMoved = QtCore.pyqtSignal(float)
+    sigMaxMoved = QtCore.pyqtSignal(float)
 
     def __init__(self):
         QtWidgets.QWidget.__init__(self)
@@ -452,19 +465,28 @@ class ScanWidget(QtWidgets.QWidget):
         fitViewButton = QtWidgets.QPushButton("Fit to View")
         self.proxy = ScanProxy(slider, axis)
         axis.proxy = self.proxy
-        self.axis = axis
 
+        # Layout.
         layout = QtWidgets.QGridLayout()
         # Default size will cause axis to disappear otherwise.
-        layout.setRowMinimumHeight(0, 25)
+        layout.setRowMinimumHeight(0, 40)
         layout.addWidget(axis, 0, 0, 1, -1)
         layout.addWidget(slider, 1, 0, 1, -1)
         layout.addWidget(zoomFitButton, 2, 0)
         layout.addWidget(fitViewButton, 2, 1)
         self.setLayout(layout)
 
-        self.axis.sigZoom.connect(self.proxy.handleZoom)
+        # Connect signals
+        slider.sigMaxMoved.connect(self.proxy.handleMaxMoved)
+        slider.sigMinMoved.connect(self.proxy.handleMinMoved)
+        self.proxy.sigMaxMoved.connect(self.sigMaxMoved)        
+        self.proxy.sigMinMoved.connect(self.sigMinMoved)
+        axis.sigZoom.connect(self.proxy.handleZoom)
+        fitViewButton.clicked.connect(self.fitToView)
+        zoomFitButton.clicked.connect(self.zoomToFit)
 
+    # Spinbox and button slots. Any time the spinboxes change, ScanWidget mirrors
+    # it and passes the information to the proxy.
     def setMax(self, val):
         self.proxy.moveMax(val)
 

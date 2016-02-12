@@ -55,15 +55,16 @@ def main():
                                QtWidgets.QLabel("Num Points"), spinboxes[2]]):
         layout.addWidget(w, 1, col)
 
-    # scanner.sigMinChanged.connect(spinboxes[0].setValue)
-    # scanner.sigMaxChanged.connect(spinboxes[1].setValue)
+    scanner.sigMinMoved.connect(spinboxes[0].setValue)
+    scanner.sigMaxMoved.connect(spinboxes[1].setValue)
     # scanner.sigNumChanged.connect(spinboxes[2].setValue)
-    # spinboxes[0].valueChanged.connect(scanner.setMin)
-    # spinboxes[1].valueChanged.connect(scanner.setMax)
+    spinboxes[0].valueChanged.connect(scanner.setMin)
+    spinboxes[1].valueChanged.connect(scanner.setMax)
     # spinboxes[2].valueChanged.connect(scanner.setNumPoints)
 
     win.setCentralWidget(container)
     win.show()
+    scanner.fitToView()
     loop.run_until_complete(win.exit_request.wait())
 
 
