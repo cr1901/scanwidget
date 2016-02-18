@@ -51,6 +51,7 @@ class ScanAxis(QtWidgets.QWidget):
         else:
             self.sigZoom.emit(-1, ev.x())
         self.update()
+        ev.accept()
 
     def labelsFit(self, numTicks, charWidth):
         # -X.Xe-XX has 8 chars, add numTicks - 1 so at least one pixel
@@ -59,11 +60,7 @@ class ScanAxis(QtWidgets.QWidget):
         print(labelSpace)
         return (labelSpace < self.width())
 
-    # Notify proxy of resize so that the current center actually remains the
-    # new center (barring floating point errors and even number pixel width)
     def resizeEvent(self, ev):
-        self.proxy.bias = self.proxy.calculateBias(self.proxy.realCenter, \
-            self.proxy.units, ev.size().width())
         QtWidgets.QWidget.resizeEvent(self, ev)
 
 
@@ -158,7 +155,6 @@ class ScanSlider(QtWidgets.QSlider):
                                                          sliderMax - sliderMin,
                                                          opt.upsideDown)
         return pixel
-
 
     # If groove and axis are not aligned (and they should be), we can use
     # this function to calculate the offset between them.
@@ -348,30 +344,39 @@ class ScanProxy(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self.axis = axis
         self.slider = slider
-        self.units = 1 # real = pixel * units + bias
-        self.bias = self.calculateBias(0.0, 1.0, self.axis.width())
-        self.realCenter = 0.0 # We need to keep a copy around in case of
-        # resizeEvent. In all other cases where mapping changes, this will be
-        # recalculated.
         self.realMin = 0
         self.realMax = 0
         self.numPoints = 10
 
+        # Transform that maps the spinboxes to a pixel position on the
+        # axis. 0 to axis.width() exclusive indicate positions which will be displayed
+        # on the axis.
+        # Because the axis's width will change when placed within a layout,
+        # the realToPixelTransform will initially be invalid. It will be set
+        # properly during the first resizeEvent, with the below transform.
+        self.realToPixelTransform = self.calculateNewRealToPixel(0.0, 1.0, \
+            self.axis.width())
+        self.invalidOldSizeExpected = True
+        self.axis.installEventFilter(self)
+
     # What real value should map to the axis center? This doesn't depend on
     # any public members so we can make decisions about centering during
     # resize and zoom events.
-    def calculateBias(self, targetRealCenter, targetUnit, axisWidth):
-        return targetRealCenter - (targetUnit * axisWidth/2)        
+    def calculateNewRealToPixel(self, targetRealCenter, targetScale, axisWidth):
+        assert isinstance(targetScale, float) and isinstance(targetRealCenter, float), \
+            "{}, {}".format(type(targetScale), type(targetRealCenter))
+        newShift = (axisWidth/2) - (targetScale * targetRealCenter)
+        return QtGui.QTransform.fromTranslate(newShift, 0).scale(targetScale, 1)   
 
     #pixel vals for sliders: 0 to slider_width - 1
     def realToPixel(self, val):
-        return (val - self.bias)/self.units
-        # return float(Fraction(1, self.units) * Fraction.from_float(val - self.bias))
+        return (QtCore.QPointF(val, 0)*self.realToPixelTransform).x()
 
     # Get a point from pixel units to what the sliders display.
     def pixelToReal(self, val):
-        return (val * self.units) + self.bias
-        # return float(Fraction.from_float(val) * self.units) + self.bias
+        (revXform, invertible) = self.realToPixelTransform.inverted()
+        assert invertible
+        return (QtCore.QPointF(val, 0)*revXform).x()
 
     def rangeToReal(self, val):
         gx = self.slider.grooveX()
@@ -412,35 +417,21 @@ class ScanProxy(QtCore.QObject):
         # Halfway between the mouse zoom and the oldCenter should be fine.
         oldCenter = self.axis.width()/2
         newCenter = (oldCenter + mouseXPos)/2
-        newUnits = self.units * zoomFactor
+        newUnits = self.realToPixelTransform.m11() * zoomFactor
         newRealCenter = self.pixelToReal(newCenter)
-        newBias = self.calculateBias(newRealCenter, newUnits, self.axis.width())
-        
-        self.units = newUnits
-        self.bias = newBias
-        self.realCenter = newRealCenter
-        print("units: ", self.units)
-        print("bias: ", self.bias)
-        print("realCenter: ", self.realCenter)
+        self.realToPixelTransform = self.calculateNewRealToPixel(newRealCenter, newUnits, self.axis.width())
         self.moveMax(self.realMax)
         self.moveMin(self.realMin)
 
     def zoomToFit(self):
         newRealCenter = (self.realMin + self.realMax)/2
         currRangeReal = abs(self.realMax - self.realMin)
-        newUnits = (currRangeReal)/(3*self.axis.width()) 
-        newBias = self.calculateBias(newRealCenter, newUnits, self.axis.width())
-
-        self.units = newUnits
-        self.bias = newBias
-        self.realCenter = newRealCenter
-        print("units: ", self.units)
-        print("bias: ", self.bias)
-        print("realCenter: ", self.realCenter)
+        newUnits = self.axis.width()/(3*currRangeReal) 
+        self.realToPixelTransform = self.calculateNewRealToPixel(newRealCenter, newUnits, self.axis.width())
+        self.printTransform()
         self.moveMax(self.realMax)
         self.moveMin(self.realMin)
         self.axis.update()
-        
 
     def fitToView(self):
         sliderRange = self.slider.maximum() - self.slider.minimum()
@@ -449,9 +440,37 @@ class ScanProxy(QtCore.QObject):
         self.slider.setUpperPosition(round((2.0/3.0)*sliderRange))
         # Signals won't fire unless slider was actually grabbed, so
         # manually update.
+        self.printTransform()
         self.handleMaxMoved(self.slider.maxVal)
         self.handleMinMoved(self.slider.minVal)
-        
+
+    def eventFilter(self, obj, ev):
+        if obj == self.axis:
+            if ev.type() == QtCore.QEvent.Resize:
+                oldScale = self.realToPixelTransform.m11()
+                newWidth = ev.size().width()
+                assert ev.oldSize().isValid() or self.invalidOldSizeExpected
+                if ev.oldSize().isValid():
+                    oldCenter = self.pixelToReal(ev.oldSize().width()/2)
+                else:
+                    # TODO: self.axis.width() is invalid during object construction.
+                    # The width will change when placed in a layout WITHOUT
+                    # a resizeEvent. Why?
+                    oldCenter = 0.0
+                    self.invalidOldSizeExpected = False
+                self.realToPixelTransform = self.calculateNewRealToPixel(oldCenter, \
+                    oldScale, newWidth)
+                assert self.pixelToReal(newWidth/2) == oldCenter
+                # We need to wait for the slider mapping to update.
+                # self.moveMax(self.realMax)
+                # self.moveMin(self.realMin)
+                
+        return False   
+
+    def printTransform(self):
+        print("m11: {}, dx: {}".format(self.realToPixelTransform.m11(), self.realToPixelTransform.dx()))
+        print("RealCenter: {}".format(self.pixelToReal(self.axis.width()/2)))
+
 # BUG: When zoom in for long periods, max will equal min. Floating point errors?
 class ScanWidget(QtWidgets.QWidget):
     sigMinMoved = QtCore.pyqtSignal(float)
@@ -484,6 +503,8 @@ class ScanWidget(QtWidgets.QWidget):
         axis.sigZoom.connect(self.proxy.handleZoom)
         fitViewButton.clicked.connect(self.fitToView)
         zoomFitButton.clicked.connect(self.zoomToFit)
+        
+        # Connect event observers.
 
     # Spinbox and button slots. Any time the spinboxes change, ScanWidget mirrors
     # it and passes the information to the proxy.
@@ -501,3 +522,6 @@ class ScanWidget(QtWidgets.QWidget):
 
     def fitToView(self):
         self.proxy.fitToView()
+
+    def reset(self):
+        self.proxy.reset()
