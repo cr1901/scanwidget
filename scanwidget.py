@@ -375,8 +375,16 @@ class ScanProxy(QtCore.QObject):
     # Get a point from pixel units to what the sliders display.
     def pixelToReal(self, val):
         (revXform, invertible) = self.realToPixelTransform.inverted()
-        assert invertible
-        return (QtCore.QPointF(val, 0)*revXform).x()
+        self.printTransform()
+        # assert invertible, "m11: {}, dx: {}".format(self.realToPixelTransform.m11(), self.realToPixelTransform.dx())
+        if not invertible:
+            intermediate = QtCore.QPointF(val, 0) * \
+                QtGui.QTransform.fromTranslate(-self.realToPixelTransform.dx(), 0)
+            realPoint = intermediate * \
+                QtGui.QTransform.fromScale(1.0/self.realToPixelTransform.m11(), 0)
+        else:
+            realPoint = QtCore.QPointF(val, 0)*revXform
+        return realPoint.x()
 
     def rangeToReal(self, val):
         gx = self.slider.grooveX()
@@ -469,7 +477,9 @@ class ScanProxy(QtCore.QObject):
 
     def printTransform(self):
         print("m11: {}, dx: {}".format(self.realToPixelTransform.m11(), self.realToPixelTransform.dx()))
-        print("RealCenter: {}".format(self.pixelToReal(self.axis.width()/2)))
+        (inverted, _) = self.realToPixelTransform.inverted()
+        print("m11: {}, dx: {}".format(inverted.m11(), inverted.dx()))
+        # print("RealCenter: {}".format(self.pixelToReal(self.axis.width()/2)))
 
 # BUG: When zoom in for long periods, max will equal min. Floating point errors?
 class ScanWidget(QtWidgets.QWidget):
