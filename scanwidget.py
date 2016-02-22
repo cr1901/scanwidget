@@ -29,7 +29,7 @@ class ScanAxis(QtWidgets.QWidget):
         # ticks possible.
         self.ticker.n = 2
         # self.ticker.dynamic 
-        ticks = self.ticker.ticks(realMin, realMax, None)
+        ticks = self.ticker.ticks(realMin, realMax)
         offset, mag = self.ticker.offset(ticks)
 
         for t in ticks:
