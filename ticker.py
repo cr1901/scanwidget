@@ -1,31 +1,37 @@
-# Robert Jordens <jordens@gmail.com>, 2016
+# Robert Jordens <rj@m-labs.hk>, 2016
 
 import numpy as np
 import unittest
 
 
 class Ticker:
-    def __init__(self, n=2, dynamic=3, steps=(5, 2, 1, .5), base=10):
-        # .5 for rounding errors
-        self.n = n
-        self.dynamic = dynamic
-        self.steps = steps
-        self.base = base
+    def __init__(self, min_ticks=2, offset_dynamic=3,
+                 steps=(5, 2, 1, .5), base=10):
+        # the .5 in steps catches rounding errors where the calculation
+        # of step_magnitude falls into the wrong exponent bin
+        self.min_ticks = min_ticks  # minimum number of ticks
+        self.offset_dynamic = offset_dynamic
+        # extract common offset from ticks if dynamic
+        # range (small range on top of large offset)
+        # exceeds that many digits
+        self.steps = steps  # tick increments at a given magnitude
+        self.base = base  # tick number system
         self.logbase = np.log(base)
 
-    def step(self, i, max):
+    def step(self, i):
         """return recommended step value for interval size i"""
         assert i > 0
-        step = i/self.n
-        step_mag = self.base**np.floor(np.log(step)/self.logbase)
+        step = i/self.min_ticks  # rational step size for min_ticks
+        step_magnitude = self.base**np.floor(np.log(step)/self.logbase)
+        # underlying magnitude for steps
         for m in self.steps:
-            good_step = m*step_mag
+            good_step = m*step_magnitude
             if good_step <= step:
                 return good_step
 
-    def ticks(self, a, b, max):
+    def ticks(self, a, b):
         """return recommended tick values for interval [a, b["""
-        step = self.step(b - a, max)
+        step = self.step(b - a)
         a0 = np.ceil(a/step)*step
         ticks = np.arange(a0, b, step)
         return ticks
@@ -40,10 +46,10 @@ class Ticker:
         if a == 0:
             return 0., 1.
         d = np.log(abs(a)/s)/self.logbase
-        if d < self.dynamic:
+        if d < self.offset_dynamic:
             return 0., 1.
         e = np.floor(np.log(abs(a))/self.logbase)
-        m = self.base**(e - self.dynamic)
+        m = self.base**(e - self.offset_dynamic)
         return np.floor(a/m)*m, m
 
 
@@ -89,19 +95,22 @@ class TickTest(unittest.TestCase):
         with self.subTest(a=a, b=b, n=n, d=d):
             t = Ticker(n, d)
             i = t.step(b - a)
-            self.assertGreaterEqual((b - a)/i, t.n)
+            self.assertGreaterEqual((b - a)/i, t.min_ticks)
             j = t.ticks(a, b)
             self.assertGreaterEqual(j[0] + i*eps, a)
             self.assertLessEqual(j[-1] - i*eps, b)
             self.assertLess(j[0] - i*(1 + eps), a)
             self.assertGreater(j[-1] + i*(1 + eps), b)
-            self.assertGreaterEqual(len(j), t.n)
-            self.assertLessEqual(len(j), np.ceil(t.n*5/2))  # max step ratio
+            self.assertGreaterEqual(len(j), t.min_ticks)
+            self.assertLessEqual(len(j), np.ceil(t.min_ticks*5/2))
+            # max step ratio
             o, m = t.offset(j)
             q = (j - o)/m
-            self.assertLess(abs(q[0]/(q[1] - q[0])), 10**(t.dynamic + 1))
+            self.assertLess(abs(q[0]/(q[1] - q[0])),
+                            10**(t.offset_dynamic + 1))
             if o:
-                self.assertGreater(abs(j[0]/(j[1] - j[0])), 10**t.dynamic)
+                self.assertGreater(abs(j[0]/(j[1] - j[0])),
+                                   10**t.offset_dynamic)
                 self.assertGreater(q[0] + i*eps/m, 0)
 
 
