@@ -5,7 +5,7 @@ from fractions import Fraction
 from ticker import *
 
 class ScanAxis(QtWidgets.QWidget):
-    sigZoom = QtCore.pyqtSignal(int, int)
+    sigZoom = QtCore.pyqtSignal(float, int)
 
     def __init__(self):
         QtWidgets.QWidget.__init__(self)
@@ -46,11 +46,14 @@ class ScanAxis(QtWidgets.QWidget):
         # if ev.delta() > 0: # TODO: Qt-4 specific.
         # TODO: If shift modifier is pressed and scroll-wheel is grazed, should
         # we honor zoom requests?
-        if ev.angleDelta().y() > 0:
-            self.sigZoom.emit(1, ev.x())
-        else:
-            self.sigZoom.emit(-1, ev.x())
-        self.update()
+        y = ev.angleDelta().y()
+        if y:
+            if y > 0:
+                z = 1 + .05*y/120.
+            else:
+                z = 1/(1 - .05*y/120.)
+            self.sigZoom.emit(z, ev.x())
+            self.update()
         ev.accept()
 
     def labelsFit(self, numTicks, charWidth):
@@ -413,13 +416,7 @@ class ScanProxy(QtCore.QObject):
     def handleMinMoved(self, rangeVal):
         self.sigMinMoved.emit(self.rangeToReal(rangeVal))
 
-    def handleZoom(self, zoomDir, mouseX):
-        if zoomDir > 0:
-            self.recalculateUnitsOnZoom(0.8, mouseX)
-        else:
-            self.recalculateUnitsOnZoom(1/0.8, mouseX)
-
-    def recalculateUnitsOnZoom(self, zoomFactor, mouseXPos):
+    def handleZoom(self, zoomFactor, mouseXPos):
         # We need to figure out what new value is to be centered in the axis
         # display.
         # Halfway between the mouse zoom and the oldCenter should be fine.
