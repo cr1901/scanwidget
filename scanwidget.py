@@ -24,23 +24,15 @@ class ScanAxis(QtWidgets.QWidget):
         realMin = self.proxy.pixelToReal(0)
         realMax = self.proxy.pixelToReal(self.width())
         
-        # At very large widths, labels may overlap slightly, since "n"
-        # is a minimum number of ticks, and ticker will try to put as many
-        # ticks possible.
-        self.ticker.n = 2
-        # self.ticker.dynamic 
-        ticks = self.ticker.ticks(realMin, realMax)
-        offset, mag = self.ticker.offset(ticks)
+        ticks, prefix, labels = self.ticker(realMin, realMax)
 
-        for t in ticks:
-            tickLabel =  "{:.1e}".format(t)
+        for t, l in zip(ticks, labels):
             painter.drawLine(self.proxy.realToPixel(t), 5,
                 self.proxy.realToPixel(t), -5)
-            painter.drawText(self.proxy.realToPixel(t), -10, tickLabel)
+            painter.drawText(self.proxy.realToPixel(t), -10, l)
             
         painter.resetTransform()
-        offsetLabel = "offset: {:.1e} magnitude: {}".format(offset, mag)
-        painter.drawText(0, 10, offsetLabel)
+        painter.drawText(0, 10, prefix)
 
     def wheelEvent(self, ev):
         # if ev.delta() > 0: # TODO: Qt-4 specific.
@@ -48,10 +40,7 @@ class ScanAxis(QtWidgets.QWidget):
         # we honor zoom requests?
         y = ev.angleDelta().y()
         if y:
-            if y > 0:
-                z = 1 + .05*y/120.
-            else:
-                z = 1/(1 - .05*y/120.)
+            z = 1.05**(y/120.)
             self.sigZoom.emit(z, ev.x())
             self.update()
         ev.accept()
