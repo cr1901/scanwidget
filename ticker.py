@@ -9,21 +9,19 @@ class Ticker:
     # such that all the log()s and intermediate values are reused. But
     # probably the string formatting itself is the limiting factor here.
     def __init__(self, min_ticks=3, precision=3,
-                 steps=(5, 2, 1, .5), base=10):
+                 steps=(5, 2, 1, .5)):
         # the .5 in steps catches rounding errors where the calculation
         # of step_magnitude falls into the wrong exponent bin
         self.min_ticks = min_ticks  # minimum number of ticks
         # the maximum number of ticks is
         # max(consecutive ratios in steps)*min_ticks
-        # thus 5/2*min_ticks
+        # thus 5/2*min_ticks for default steps
         self.precision = precision
         # maximum number of significant digits in labels
-        # also extract common offset from ticks if dynamic
-        # range (small range on top of large offset)
-        # exceeds that many digits
+        # also extract common offset and magnitude from ticks
+        # if dynamic range exceeds precision number of digits
+        # (small range on top of large offset)
         self.steps = steps  # tick increments at a given magnitude
-        self.base = base  # tick number system
-        self.logbase = np.log(base)
 
     def step(self, i):
         """
@@ -31,7 +29,7 @@ class Ticker:
         """
         assert i > 0
         step = i/self.min_ticks  # rational step size for min_ticks
-        step_magnitude = self.base**np.floor(np.log(step)/self.logbase)
+        step_magnitude = 10**np.floor(np.log10(step))
         # underlying magnitude for steps
         for m in self.steps:
             good_step = m*step_magnitude
@@ -53,14 +51,13 @@ class Ticker:
         (small range on large offset).
         If offset is finite, show `offset + value`.
         """
-        assert a < b
         if a == 0.:
             return 0.
-        la = np.floor(np.log(abs(a))/self.logbase)
-        lr = np.floor(np.log(b - a)/self.logbase)
+        la = np.floor(np.log10(abs(a)))
+        lr = np.floor(np.log10(b - a))
         if la - lr < self.precision:
             return 0.
-        magnitude = self.base**(la - self.precision)
+        magnitude = 10**(la - self.precision)
         offset = np.floor(a/magnitude)*magnitude
         return offset
 
@@ -73,10 +70,10 @@ class Ticker:
         This depends on proper offsetting by `offset()`.
         """
         v = max(abs(a), abs(b))
-        magnitude = np.floor(np.log(v)/self.logbase)
+        magnitude = np.floor(np.log10(v))
         if -self.precision < magnitude < self.precision:
             return 1.
-        return self.base**magnitude
+        return 10**magnitude
 
     def fix_minus(self, s):
         return s.replace("-", "−")  # unicode minus
@@ -85,7 +82,7 @@ class Ticker:
         """
         Determine format string to represent step sufficiently accurate.
         """
-        dynamic = -int(np.floor(np.log(step)/self.logbase))
+        dynamic = -int(np.floor(np.log10(step)))
         dynamic = min(max(0, dynamic), self.precision)
         return "{{:1.{:d}f}}".format(dynamic)
 
@@ -200,7 +197,7 @@ class TickTest(unittest.TestCase):
             v = [eval((prefix + l).replace("−", "-").replace("×", "*"))
                  for l in labels]
             np.testing.assert_allclose(ticks, v,
-                                       rtol=t.base**-t.precision,
+                                       rtol=10**-t.precision,
                                        atol=1e-13*i)
 
 
