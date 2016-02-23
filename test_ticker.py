@@ -59,19 +59,15 @@ class TickTest(unittest.TestCase):
             q = j - o
             m = t.magnitude(q[0], q[-1])
             q = q/m
-            self.assertLess(abs(q[0]/(q[1] - q[0])),
-                            10**(t.precision + 1))
+            self.assertLess(abs(q[0]/(q[1] - q[0])), 10**(t.precision + 1))
             if o:
-                self.assertGreater(abs(j[0]/(j[1] - j[0])),
-                                   10**t.precision)
+                self.assertGreater(abs(j[0]/(j[1] - j[0])), 10**t.precision)
                 self.assertGreater(q[0] + i*eps/m, 0)
             ticks, prefix, labels = t(a, b)
             self.assertEqual(sorted(set(labels)), sorted(labels))
             v = [eval((prefix + l).replace("−", "-").replace("×", "*"))
                  for l in labels]
-            np.testing.assert_allclose(ticks, v,
-                                       rtol=10**-t.precision,
-                                       atol=1e-13*i)
+            np.testing.assert_allclose(ticks, v, atol=2e-14*i)
 
 
 if __name__ == "__main__":

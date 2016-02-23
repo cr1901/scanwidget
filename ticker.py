@@ -4,8 +4,8 @@ import numpy as np
 
 
 class Ticker:
-    # TODO: if this turns out to be computationally limiting, then refactor
-    # such that all the log()s and intermediate values are reused. But
+    # TODO: if this turns out to be computationally expensive, then refactor
+    # such that the log()s and intermediate values are reused. But
     # probably the string formatting itself is the limiting factor here.
     def __init__(self, min_ticks=3, precision=3, steps=(5, 2, 1, .5)):
         """
@@ -29,7 +29,8 @@ class Ticker:
         """
         Return recommended step value for interval size `i`.
         """
-        assert i > 0
+        if not i:
+            raise ValueError("Need a finite interval")
         step = i/self.min_ticks  # rational step size for min_ticks
         step_magnitude = 10**np.floor(np.log10(step))
         # underlying magnitude for steps
@@ -51,6 +52,7 @@ class Ticker:
         """
         Find offset if dynamic range of the interval is large
         (small range on large offset).
+
         If offset is finite, show `offset + value`.
         """
         if a == 0.:
@@ -67,8 +69,7 @@ class Ticker:
         """
         Determine the scaling magnitude.
 
-        Return scaling factor that differs from unity if the numbers
-        are to be represented as `magnitude * value`.
+        If magnitude differs from unity, show `magnitude * value`.
         This depends on proper offsetting by `offset()`.
         """
         v = max(abs(a), abs(b))
@@ -106,6 +107,8 @@ class Ticker:
     def prefix(self, offset, magnitude):
         """
         Stringify `offset` and `magnitude`.
+
+        Expects the string to be shown top/left of the value it refers to.
         """
         prefix = ""
         if offset != 0.:
@@ -116,11 +119,11 @@ class Ticker:
 
     def __call__(self, a, b):
         """
-        Determine step size, ticks, offset and magnitude given the interval
+        Determine ticks, prefix and labels given the interval
         `[a, b[`.
 
-        Return array with tick value, prefix string to be show to the left or
-        above the tick labels, and tick labels.
+        Return tick values, prefix string to be show to the left or
+        above the labels, and tick labels.
         """
         ticks = self.ticks(a, b)
         offset = self.offset(ticks[0], ticks[1])
