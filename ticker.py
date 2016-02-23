@@ -165,7 +165,7 @@ class TickTest(unittest.TestCase):
                 self.assertGreater(q[0] + i*eps/m, 0)
             ticks, prefix, labels = t(a, b)
             self.assertEqual(sorted(set(labels)), sorted(labels))
-            v = [eval((prefix + l).replace("−", "-"))  # unicode minus
+            v = [eval((prefix + l).replace("−", "-").replace("×", "*"))
                  for l in labels]
             np.testing.assert_allclose(ticks, v,
                                        rtol=t.base**-t.precision,
