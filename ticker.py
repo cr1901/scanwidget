@@ -5,6 +5,9 @@ import unittest
 
 
 class Ticker:
+    # TODO: if this turns out to be computationally limiting, then refactor
+    # such that all the log()s and intermediate values are reused. But
+    # probably the string formatting itself is the limiting factor here.
     def __init__(self, min_ticks=3, precision=3,
                  steps=(5, 2, 1, .5), base=10):
         # the .5 in steps catches rounding errors where the calculation
@@ -23,7 +26,9 @@ class Ticker:
         self.logbase = np.log(base)
 
     def step(self, i):
-        """return recommended step value for interval size i"""
+        """
+        Return recommended step value for interval size i.
+        """
         assert i > 0
         step = i/self.min_ticks  # rational step size for min_ticks
         step_magnitude = self.base**np.floor(np.log(step)/self.logbase)
@@ -34,17 +39,20 @@ class Ticker:
                 return good_step
 
     def ticks(self, a, b):
-        """return recommended tick values for interval [a, b["""
+        """
+        Return recommended tick values for interval [a, b[.
+        """
         step = self.step(b - a)
         a0 = np.ceil(a/step)*step
         ticks = np.arange(a0, b, step)
         return ticks
 
     def offset(self, a, b):
-        """find offset and magnitude if dynamic range of ticks is too large
+        """
+        Find offset if dynamic range of the interval is large
         (small range on large offset).
-        show 'offset + magnitude*' at the left and then
-        use (ticks - offset)/magnitude as labels"""
+        If offset is finite, show `offset + value`.
+        """
         assert a < b
         if a == 0.:
             return 0.
@@ -57,6 +65,13 @@ class Ticker:
         return offset
 
     def magnitude(self, a, b):
+        """
+        Determine the scaling magnitude of the interval [a, b[.
+
+        Return scaling factor that differs from unity if the numbers
+        are to be represented as `magnitude * value`.
+        This depends on proper offsetting by `offset()`.
+        """
         v = max(abs(a), abs(b))
         magnitude = np.floor(np.log(v)/self.logbase)
         if -self.precision < magnitude < self.precision:
@@ -67,11 +82,18 @@ class Ticker:
         return s.replace("-", "−")  # unicode minus
 
     def format(self, step):
+        """
+        Determine format string to represent step sufficiently accurate.
+        """
         dynamic = -int(np.floor(np.log(step)/self.logbase))
         dynamic = min(max(0, dynamic), self.precision)
         return "{{:1.{:d}f}}".format(dynamic)
 
     def compact_exponential(self, v):
+        """
+        Format `v` in in compact exponential, stripping redundant elements
+        (plusses, leading and trailing zeros, trailing `e`).
+        """
         # this is after the matplotlib ScalarFormatter
         # without any i18n
         significand, exponent = "{:1.10e}".format(v).split("e")
@@ -83,6 +105,9 @@ class Ticker:
         return self.fix_minus(s)
 
     def prefix(self, offset, magnitude):
+        """
+        Stringify `offset` and `magnitude`.
+        """
         prefix = ""
         if offset != 0.:
             prefix += self.compact_exponential(offset) + " + "
@@ -91,14 +116,21 @@ class Ticker:
         return prefix
 
     def __call__(self, a, b):
+        """
+        Determine step size, ticks, offset and magnitude given the interval
+        [a, b[.
+
+        Return array with tick value, prefix string to be show to the left or
+        above the tick labels, and tick labels.
+        """
         ticks = self.ticks(a, b)
         offset = self.offset(ticks[0], ticks[1])
-        t0 = ticks - offset
-        magnitude = self.magnitude(t0[0], t0[-1])
+        t = ticks - offset
+        magnitude = self.magnitude(t[0], t[-1])
+        t /= magnitude
         prefix = self.prefix(offset, magnitude)
-        t1 = t0/magnitude
-        format = self.format(t1[1] - t1[0])
-        labels = [self.fix_minus(format.format(t)) for t in t1]
+        format = self.format(t[1] - t[0])
+        labels = [self.fix_minus(format.format(t)) for t in t]
         return ticks, prefix, labels
 
 
