@@ -87,7 +87,7 @@ class Ticker:
         if offset != 0.:
             prefix += self.compact_exponential(offset) + " + "
         if magnitude != 1.:
-            prefix += self.compact_exponential(magnitude) + " * "
+            prefix += self.compact_exponential(magnitude) + " × "
         return prefix
 
     def __call__(self, a, b):
