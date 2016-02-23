@@ -15,6 +15,10 @@ class TickTest(unittest.TestCase):
                 (.3, .6, 2),
                 (.3, .6, 3),
                 (.3, .6, 4),
+                (1000.0001, 1000.0002, 3),
+                (1234567.89123, 1234567.89124, 3),
+                (1234567.8, 1234567.9, 30),
+                (3.1349, 3.1415, 9),
         ]:
             self._one(a, b, n)
 
@@ -28,8 +32,9 @@ class TickTest(unittest.TestCase):
                                 yield a
 
     def _b(self, a):
+        yield 0
         for b in (np.pi, 1, 1.1e-6, 1.9e6):
-            for b in (0, b, a*b):
+            for b in (b, a*b):
                 yield b
 
     def test_many(self):
@@ -45,24 +50,28 @@ class TickTest(unittest.TestCase):
         eps = 1e-8
         with self.subTest(a=a, b=b, n=n, d=d):
             t = Ticker(n, d)
+            # ticks, prefix, labels = t(a, b)
+            # print(a, b, ticks, prefix, labels)
+
             i = t.step(b - a)
             self.assertGreaterEqual((b - a)/i, t.min_ticks)
             j = t.ticks(a, b)
             self.assertGreaterEqual(j[0] + i*eps, a)
-            self.assertLessEqual(j[-1] - i*eps, b)
             self.assertLess(j[0] - i*(1 + eps), a)
+            self.assertLessEqual(j[-1] - i*eps, b)
             self.assertGreater(j[-1] + i*(1 + eps), b)
             self.assertGreaterEqual(len(j), t.min_ticks)
             self.assertLessEqual(len(j), np.ceil(t.min_ticks*5/2))
-            # max step ratio
-            o = t.offset(j[0], j[-1])
+            o = t.offset(j[0], j[1] - j[0])
             q = j - o
-            m = t.magnitude(q[0], q[-1])
+            m = t.magnitude(q[0], q[-1], q[1] - q[0])
             q = q/m
             self.assertLess(abs(q[0]/(q[1] - q[0])), 10**(t.precision + 1))
             if o:
-                self.assertGreater(abs(j[0]/(j[1] - j[0])), 10**t.precision)
+                # not the only reason:
+                # self.assertGreater(abs(j[0]/(j[1] - j[0])), 10**t.precision)
                 self.assertGreater(q[0] + i*eps/m, 0)
+
             ticks, prefix, labels = t(a, b)
             self.assertEqual(sorted(set(labels)), sorted(labels))
             v = [eval((prefix + l).replace("−", "-").replace("×", "*"))

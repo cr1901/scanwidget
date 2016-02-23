@@ -48,7 +48,7 @@ class Ticker:
         ticks = np.arange(a0, b, step)
         return ticks
 
-    def offset(self, a, b):
+    def offset(self, a, step):
         """
         Find offset if dynamic range of the interval is large
         (small range on large offset).
@@ -58,25 +58,25 @@ class Ticker:
         if a == 0.:
             return 0.
         la = np.floor(np.log10(abs(a)))
-        lr = np.floor(np.log10(b - a))
+        lr = np.floor(np.log10(step))
         if la - lr < self.precision:
             return 0.
-        magnitude = 10**(la - self.precision)
+        magnitude = 10**(lr - 1 + self.precision)
         offset = np.floor(a/magnitude)*magnitude
         return offset
 
-    def magnitude(self, a, b):
+    def magnitude(self, a, b, step):
         """
         Determine the scaling magnitude.
 
         If magnitude differs from unity, show `magnitude * value`.
         This depends on proper offsetting by `offset()`.
         """
-        v = max(abs(a), abs(b))
-        magnitude = np.floor(np.log10(v))
-        if -self.precision < magnitude < self.precision:
+        v = np.floor(np.log10(max(abs(a), abs(b))))
+        w = np.floor(np.log10(step))
+        if v < self.precision and w > -self.precision:
             return 1.
-        return 10**magnitude
+        return 10**v
 
     def fix_minus(self, s):
         return s.replace("-", "−")  # unicode minus
@@ -126,9 +126,9 @@ class Ticker:
         above the labels, and tick labels.
         """
         ticks = self.ticks(a, b)
-        offset = self.offset(ticks[0], ticks[1])
+        offset = self.offset(a, ticks[1] - ticks[0])
         t = ticks - offset
-        magnitude = self.magnitude(t[0], t[-1])
+        magnitude = self.magnitude(t[0], t[-1], t[1] - t[0])
         t /= magnitude
         prefix = self.prefix(offset, magnitude)
         format = self.format(t[1] - t[0])
