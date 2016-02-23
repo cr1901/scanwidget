@@ -33,8 +33,8 @@ class TickTest(unittest.TestCase):
 
     def _b(self, a):
         yield 0
-        for b in (np.pi, 1, 1.1e-6, 1.9e6):
-            for b in (b, a*b):
+        for b in (np.pi, 1 + 1.3e-6, 1.1e-6, 1.9e6):
+            for b in (b, a*b, a/b):
                 yield b
 
     def test_many(self):
