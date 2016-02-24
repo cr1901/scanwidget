@@ -15,7 +15,9 @@ class ScanAxis(QtWidgets.QWidget):
         painter = QtGui.QPainter(self)
 
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
-        painter.translate(0, self.height() - 5)
+        # The center of the slider handles should reflect what's displayed
+        # on the spinboxes.
+        painter.translate(self.proxy.slider.handleWidth()/2, self.height() - 5)
         painter.drawLine(0, 0, self.width(), 0)
         realMin = self.proxy.pixelToReal(0)
         realMax = self.proxy.pixelToReal(self.width())
