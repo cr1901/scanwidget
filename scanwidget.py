@@ -442,24 +442,29 @@ class ScanProxy(QtCore.QObject):
         self.moveMin(self.realMin)
 
     def zoomToFit(self):
-        newRealCenter = (self.realMin + self.realMax) / 2
         currRangeReal = abs(self.realMax - self.realMin)
-        newUnits = self.axis.width() / (3 * currRangeReal)
-        self.realToPixelTransform = self.calculateNewRealToPixel(
-            newRealCenter, newUnits, self.axis.width())
+        newScale = (self.slider.effectiveWidth()) / \
+            (3 * currRangeReal)
+        newLeft = self.realMin - self.slider.effectiveWidth()/(3*newScale)
+        self.realToPixelTransform = \
+            self.calculateNewRealToPixel(newLeft, newScale)
         self.printTransform()
         self.moveMax(self.realMax)
         self.moveMin(self.realMin)
         self.axis.update()
 
     def fitToView(self):
+        currRangeReal = self.pixelToReal(self.slider.effectiveWidth()) - \
+            self.pixelToReal(0)
+        newMin = self.pixelToReal((1.0 / 3.0) * self.slider.effectiveWidth())
+        newMax = self.pixelToReal((2.0 / 3.0) * self.slider.effectiveWidth())
         sliderRange = self.slider.maximum() - self.slider.minimum()
         assert sliderRange > 0
-        self.slider.setLowerPosition(round((1.0 / 3.0) * sliderRange))
-        self.slider.setUpperPosition(round((2.0 / 3.0) * sliderRange))
+        self.moveMin(newMin)
+        self.moveMax(newMax)
+        # self.slider.setUpperPosition(round((2.0 / 3.0) * sliderRange))
         # Signals won't fire unless slider was actually grabbed, so
         # manually update.
-        self.printTransform()
         self.handleMaxMoved(self.slider.maxVal)
         self.handleMinMoved(self.slider.minVal)
 
