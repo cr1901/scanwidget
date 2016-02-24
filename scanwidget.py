@@ -1,5 +1,5 @@
 from PyQt5 import QtGui, QtCore, QtWidgets
-from ticker import *
+from ticker import Ticker
 
 
 class ScanAxis(QtWidgets.QWidget):
@@ -40,13 +40,6 @@ class ScanAxis(QtWidgets.QWidget):
             self.sigZoom.emit(z, ev.x())
             self.update()
         ev.accept()
-
-    def labelsFit(self, numTicks, charWidth):
-        # -X.Xe-XX has 8 chars, add numTicks - 1 so at least one pixel
-        # between consecutive labels.
-        labelSpace = (numTicks * charWidth * 8) + numTicks - 1
-        print(labelSpace)
-        return (labelSpace < self.width())
 
     def resizeEvent(self, ev):
         QtWidgets.QWidget.resizeEvent(self, ev)
@@ -402,8 +395,8 @@ class ScanProxy(QtCore.QObject):
         return realPoint.x()
 
     def rangeToReal(self, val):
-        gx = self.slider.grooveX()
-        ax = self.axis.x()
+        # gx = self.slider.grooveX()
+        # ax = self.axis.x()
         # assert gx == ax, "gx: {}, ax: {}".format(gx, ax)
         pixelVal = self.slider.rangeValueToPixelPos(val)
         return self.pixelToReal(pixelVal)
@@ -454,8 +447,6 @@ class ScanProxy(QtCore.QObject):
         self.axis.update()
 
     def fitToView(self):
-        currRangeReal = self.pixelToReal(self.slider.effectiveWidth()) - \
-            self.pixelToReal(0)
         newMin = self.pixelToReal((1.0 / 3.0) * self.slider.effectiveWidth())
         newMax = self.pixelToReal((2.0 / 3.0) * self.slider.effectiveWidth())
         sliderRange = self.slider.maximum() - self.slider.minimum()
