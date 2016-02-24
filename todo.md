@@ -30,5 +30,6 @@
 * Spin boxes should use scientific notation. When updated, they should show
   "{:g}".format(value). When changed, they should keep the value but validate
   and use float(input).
+  http://jdreaver.com/posts/2014-07-28-scientific-notation-spin-box-pyside.html
 * When dragging a slider, it should snap (-> spinboxes) to "nice" values. The
   Something like rounding to Ticker().step() should be sufficient.
