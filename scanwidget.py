@@ -430,7 +430,7 @@ class ScanProxy(QtCore.QObject):
         newUnits = self.realToPixelTransform.m11() * zoomFactor
         newRealCenter = self.pixelToReal(newCenter)
         self.realToPixelTransform = self.calculateNewRealToPixel(
-            newRealCenter, newUnits, self.axis.width())
+            newRealCenter, newUnits)
         self.moveMax(self.realMax)
         self.moveMin(self.realMin)
 
