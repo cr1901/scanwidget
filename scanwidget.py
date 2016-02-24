@@ -114,13 +114,11 @@ class ScanSlider(QtWidgets.QSlider):
                                          QtWidgets.QStyle.SC_SliderHandle,
                                          self)
 
-        # TODO: Slider's middle (not left) should be what the range value
-        # reflect?
         sliderLength = sr.width()
         sliderMin = gr.x()
-        # Presumably rectangles overlap at right edge?
+        # For historical reasons right() returns left()+width() - 1
+        # x() is equivalent to left().
         sliderMax = gr.right() - sliderLength + 1
-
         return QtWidgets.QStyle.sliderValueFromPosition(self.minimum(),
                                                         self.maximum(),
                                                         pos - sliderMin,
@@ -147,6 +145,29 @@ class ScanSlider(QtWidgets.QSlider):
                                                          sliderMax - sliderMin,
                                                          opt.upsideDown)
         return pixel
+
+    # When calculating conversions to/from pixel space, not all of the slider's
+    # width is actually usable, because the slider handle has a nonzero width,
+    # and We use this function as a helper when the axis
+    # needs slider information.
+    def handleWidth(self):
+        opt = QtWidgets.QStyleOptionSlider()
+        self.initStyleOption(opt)
+        sr = self.style().subControlRect(QtWidgets.QStyle.CC_Slider, opt,
+                                         QtWidgets.QStyle.SC_SliderHandle,
+                                         self)
+        return sr.width()
+
+    def effectiveWidth(self):
+        opt = QtWidgets.QStyleOptionSlider()
+        self.initStyleOption(opt)
+        gr = self.style().subControlRect(QtWidgets.QStyle.CC_Slider, opt,
+                                         QtWidgets.QStyle.SC_SliderGroove,
+                                         self)
+        sliderLength = self.handleWidth()
+        sliderMin = gr.x()
+        sliderMax = gr.right() - sliderLength + 1
+        return sliderMax - sliderMin
 
     # If groove and axis are not aligned (and they should be), we can use
     # this function to calculate the offset between them.
@@ -217,7 +238,6 @@ class ScanSlider(QtWidgets.QSlider):
             if high != self.maxVal:
                 self.maxVal = high
                 self.maxPos = high
-                self
                 # emit
             # emit spanChanged
             self.update()
@@ -353,22 +373,16 @@ class ScanProxy(QtCore.QObject):
         # the realToPixelTransform will initially be invalid. It will be set
         # properly during the first resizeEvent, with the below transform.
         self.realToPixelTransform = \
-            self.calculateNewRealToPixel(0.0, 1.0,
-                                         self.axis.width())
+            self.calculateNewRealToPixel(-self.axis.width()/2, 1.0)
         self.invalidOldSizeExpected = True
         self.axis.installEventFilter(self)
 
-    # What real value should map to the axis center? This doesn't depend on
-    # any public members so we can make decisions about centering during
+    # What real value should map to the axis/slider left? This doesn't depend
+    # on any public members so we can make decisions about centering during
     # resize and zoom events.
-    def calculateNewRealToPixel(self, targetRealCenter, targetScale,
-                                axisWidth):
-        assert isinstance(targetScale, float) and \
-            isinstance(targetRealCenter, float), \
-            "{}, {}".format(type(targetScale), type(targetRealCenter))
-        newShift = (axisWidth / 2) - (targetScale * targetRealCenter)
-        return QtGui.QTransform.fromTranslate(newShift, 0).scale(targetScale,
-                                                                 1)
+    def calculateNewRealToPixel(self, targetLeft, targetScale):
+        return QtGui.QTransform.fromScale(targetScale, 1). \
+            translate(-targetLeft, 0)
 
     # pixel vals for sliders: 0 to slider_width - 1
     def realToPixel(self, val):
@@ -378,15 +392,13 @@ class ScanProxy(QtCore.QObject):
     def pixelToReal(self, val):
         (revXform, invertible) = self.realToPixelTransform.inverted()
         if not invertible:
-            intermediate = QtCore.QPointF(val, 0) * \
+            revXform = \
                 QtGui.QTransform.fromTranslate(-self.realToPixelTransform.dx(),
-                                               0)
-            realPoint = intermediate * \
+                                               0) * \
                 QtGui.QTransform.fromScale(1.0 /
                                            self.realToPixelTransform.m11(),
                                            0)
-        else:
-            realPoint = QtCore.QPointF(val, 0) * revXform
+        realPoint = QtCore.QPointF(val, 0) * revXform
         return realPoint.x()
 
     def rangeToReal(self, val):
@@ -454,32 +466,37 @@ class ScanProxy(QtCore.QObject):
     def eventFilter(self, obj, ev):
         if obj == self.axis:
             if ev.type() == QtCore.QEvent.Resize:
-                oldScale = self.realToPixelTransform.m11()
-                newWidth = ev.size().width()
-                assert ev.oldSize().isValid() or self.invalidOldSizeExpected
+                oldLeft = self.pixelToReal(0)
                 if ev.oldSize().isValid():
-                    oldCenter = self.pixelToReal(ev.oldSize().width() / 2)
+                    refWidth = ev.oldSize().width() - self.slider.handleWidth()
+                    refRight = self.pixelToReal(refWidth)
+                    newWidth = ev.size().width() - self.slider.handleWidth()
+                    assert refRight > oldLeft
+                    newScale = newWidth/(refRight - oldLeft)
                 else:
                     # TODO: self.axis.width() is invalid during object
                     # construction. The width will change when placed in a
                     # layout WITHOUT a resizeEvent. Why?
-                    oldCenter = 0.0
+                    oldLeft = -ev.size().width()/2
+                    newScale = 1.0
                     self.invalidOldSizeExpected = False
                 self.realToPixelTransform = \
-                    self.calculateNewRealToPixel(oldCenter, oldScale, newWidth)
-                assert self.pixelToReal(newWidth / 2) == oldCenter
-                # We need to wait for the slider mapping to update.
-                # self.moveMax(self.realMax)
-                # self.moveMin(self.realMin)
-
+                    self.calculateNewRealToPixel(oldLeft, newScale)
+                # assert self.pixelToReal(0) == oldLeft, \
+                # "{}, {}".format(self.pixelToReal(0), oldLeft)
+                # Slider will update independently, making sure that the old
+                # slider positions are preserved. Because of this, we can be
+                # confident that the new slider position will still map to the
+                # same positions in the new axis-space.
         return False
 
     def printTransform(self):
         print("m11: {}, dx: {}".format(
             self.realToPixelTransform.m11(), self.realToPixelTransform.dx()))
-        (inverted, _) = self.realToPixelTransform.inverted()
-        print("m11: {}, dx: {}".format(inverted.m11(), inverted.dx()))
-        # print("RealCenter: {}".format(self.pixelToReal(self.axis.width()/2)))
+        (inverted, invertible) = self.realToPixelTransform.inverted()
+        print("m11: {}, dx: {}, singular: {}".format(inverted.m11(),
+                                                     inverted.dx(),
+                                                     not invertible))
 
 # BUG: When zoom in for long periods, max will equal min. Floating point
 # errors?

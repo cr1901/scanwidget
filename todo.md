@@ -1,8 +1,7 @@
 ## To Fix (Bugs)
-* Code cleanup (yapf, flake8, no unused imports, no stubs, useful comments)
-* Slider positions need to be updated during zoom; have not figured out a "clean" way to do this that doesn't involve signals or unnecessary inter-object communication. I may remove the event filter completely.
 * Fix FitToView and ZoomToFit idempotency.
     * Related to slider-to-pixel transform having an offset of slider_width/2 pixels.
+    * Lying about the slider-to-pixel transform to the proxy can cause infinite signal recursion when the spinboxes are updated.
 * At large zooms, the sliders start taking the wrong positions due to floating point errors?
 * Check that recalculating the zoom transform in fact has a relative error of 10^-15, not absolute error. If latter, rethink transform.
 * Remove asserts (or catch AssertionFailure) and just refuse to honor zooms at some point.
