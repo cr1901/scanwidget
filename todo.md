@@ -12,7 +12,6 @@
 * Change slider behavior so that sliders can cross/overlap.
     * Rename Min/Max (and Lower/Upper?) terminology to Start/Stop
 * Make zoom, (1/n, (n-1)/n) placement, user-settable, exposed in ScanWidget attributes (just programmatically, no need for runtime configurability)
-* Center tick labels above ticks
 
 ## To Implement
 * Implement slider hiding when zoom causes sliders to disappear.

@@ -13,7 +13,8 @@ class ScanAxis(QtWidgets.QWidget):
 
     def paintEvent(self, ev):
         painter = QtGui.QPainter(self)
-
+        font = painter.font()
+        avgCharWidth = QtGui.QFontMetrics(font).averageCharWidth()
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         # The center of the slider handles should reflect what's displayed
         # on the spinboxes.
@@ -25,8 +26,9 @@ class ScanAxis(QtWidgets.QWidget):
         ticks, prefix, labels = self.ticker(realMin, realMax)
         for t, l in zip(ticks, labels):
             t = self.proxy.realToPixel(t)
+            textCenter = (len(l)/2.0)*avgCharWidth
             painter.drawLine(t, 5, t, -5)
-            painter.drawText(t, -10, l)
+            painter.drawText(t - textCenter, -10, l)
         painter.resetTransform()
         painter.drawText(0, 10, prefix)
         # TODO:
