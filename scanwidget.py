@@ -39,7 +39,12 @@ class ScanAxis(QtWidgets.QWidget):
         y = ev.angleDelta().y()
         if y:
             z = 1.05**(y / 120.)
-            self.sigZoom.emit(z, ev.x())
+            # Remove the slider-handle shift correction, b/c none of the other
+            # widgets know about it. If we have the mouse directly over a tick
+            # during a zoom, it should appear as if we are doing zoom relative
+            # to the ticks which live in axis pixel-space, not slider
+            # pixel-space.
+            self.sigZoom.emit(z, ev.x() - self.proxy.slider.handleWidth()/2)
             self.update()
         ev.accept()
 
@@ -131,9 +136,8 @@ class ScanSlider(QtWidgets.QSlider):
         return pixel
 
     # When calculating conversions to/from pixel space, not all of the slider's
-    # width is actually usable, because the slider handle has a nonzero width,
-    # and We use this function as a helper when the axis
-    # needs slider information.
+    # width is actually usable, because the slider handle has a nonzero width.
+    # We use this function as a helper when the axis needs slider information.
     def handleWidth(self):
         opt = QtWidgets.QStyleOptionSlider()
         self.initStyleOption(opt)
@@ -411,12 +415,11 @@ class ScanProxy(QtCore.QObject):
         # We need to figure out what new value is to be centered in the axis
         # display.
         # Halfway between the mouse zoom and the oldCenter should be fine.
-        oldCenter = self.axis.width() / 2
-        newCenter = (oldCenter + mouseXPos) / 2
-        newUnits = self.realToPixelTransform.m11() * zoomFactor
-        newRealCenter = self.pixelToReal(newCenter)
+        newScale = self.realToPixelTransform.m11() * zoomFactor
+        refReal = self.pixelToReal(mouseXPos)
+        newLeft = refReal - mouseXPos/newScale
         self.realToPixelTransform = self.calculateNewRealToPixel(
-            newRealCenter, newUnits)
+            newLeft, newScale)
         self.moveMax(self.realMax)
         self.moveMin(self.realMin)
 

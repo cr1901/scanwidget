@@ -6,9 +6,6 @@
 * Many more slider positions than 100
 
 ## To Modify (Not technically broken, but needs to be changed on request)
-* Scroll wheel zoom needs to be fixed per the following discussion with sb0:
-    * sb0: Just to reiterate, the behavior you want is that if you zoom the mouse if the cursor is in the center of two overlapped sliders, the sliders should separate equal distance (in pixels) relative to the center of your zoom.
-    * rjo: in other words: the origin/center of the zoom is the cursor position, a.k.a the value under the cursor stays where it is when zooming.
 * Change slider behavior so that sliders can cross/overlap.
     * Rename Min/Max (and Lower/Upper?) terminology to Start/Stop
 * Make zoom, (1/n, (n-1)/n) placement, user-settable, exposed in ScanWidget attributes (just programmatically, no need for runtime configurability)
