@@ -1,10 +1,8 @@
 import asyncio
 import atexit
-import os
 import scanwidget
 
-# First two are portable between PyQt4 and 5. Remaining are not.
-from quamash import QApplication, QEventLoop, QtGui, QtCore, QtWidgets
+from quamash import QApplication, QEventLoop, QtCore, QtWidgets
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -29,30 +27,28 @@ def main():
     asyncio.set_event_loop(loop)
     atexit.register(loop.close)
 
-    # Create a window
     win = MainWindow(app, None)
 
     container = QtWidgets.QWidget(win)
     layout = QtWidgets.QGridLayout()
     container.setLayout(layout)
-    spinboxes = [QtWidgets.QDoubleSpinBox(), QtWidgets.QDoubleSpinBox(),
-                 QtWidgets.QSpinBox()]
     scanner = scanwidget.ScanWidget()
-
     layout.addWidget(scanner, 0, 0, 1, -1)
 
+    spinboxes = [QtWidgets.QDoubleSpinBox(), QtWidgets.QDoubleSpinBox(),
+                 QtWidgets.QSpinBox()]
     for s in spinboxes:
         if type(s) is QtWidgets.QDoubleSpinBox:
-            s.setDecimals(17)
+            s.setDecimals(13)
             s.setMaximum(float("Inf"))
             s.setMinimum(float("-Inf"))
         else:
-            s.setMinimum(2)
+            s.setMinimum(1)
             s.setValue(10)
 
-    for (col, w) in enumerate([QtWidgets.QLabel("Min"), spinboxes[0],
-                               QtWidgets.QLabel("Max"), spinboxes[1],
-                               QtWidgets.QLabel("Num Points"), spinboxes[2]]):
+    for (col, w) in enumerate([QtWidgets.QLabel("Start"), spinboxes[0],
+                               QtWidgets.QLabel("Stop"), spinboxes[1],
+                               QtWidgets.QLabel("Points"), spinboxes[2]]):
         layout.addWidget(w, 1, col)
 
     scanner.sigMinMoved.connect(spinboxes[0].setValue)
